@@ -1,0 +1,305 @@
+import Qq
+import Lean
+
+universe u₁ u₂ u₃ u₄
+structure Container where
+  A: Type u₁
+  B: A → Type u₂
+
+namespace Container
+
+variable {C:Container.{u₁, u₂}}
+
+def Obj (C:Container.{u₁, u₂}) (α:Type u₃) :=
+  Σ X:C.A, C.B X → α
+
+def Map {C:Container.{u₁, u₂}} {α:Type u₃} {β: Type u₄} (f:α → β) (x:C.Obj α) : C.Obj β :=
+  ⟨x.fst, f ∘ x.snd⟩
+
+instance (C:Container) : Functor C.Obj where
+  map f x := ⟨x.fst, f ∘ x.snd⟩
+
+inductive Approx (C:Container) : Nat → Type _ where
+| MStep : {n:Nat} → (node:C.A) → (children:C.B node → Approx C n) → Approx C (.succ n)
+| MStop : Approx C 0
+
+#check @Approx
+
+def Approx.node {n:Nat} : Approx C (.succ n) →  C.A
+| .MStep node _ => node
+
+def Approx.children {n:Nat} : (approx:Approx C (.succ n)) → C.B approx.node → Approx C n
+| .MStep _ children => children
+
+inductive Agree : ∀ {n:Nat}, Approx C n → Approx C (.succ n) → Prop where
+| AgreeStep : {n:Nat} → (node:C.A) →
+  (k₁:C.B node → Approx C n) →
+  (k₂:C.B node → Approx C (.succ n)) →
+  (∀ x, Agree (k₁ x) (k₂ x)) →
+  Agree (Approx.MStep node k₁) (Approx.MStep node k₂)
+| AgreeStop : ∀ x, Agree (.MStop) x
+
+def Agree.toExists {n:Nat} (a₁:Approx C (.succ n)) (a₂:Approx C (.succ (.succ n)))
+  (agree:Agree a₁ a₂) : ∃ node k₁ k₂,
+    a₁ = Approx.MStep node k₁ ∧ a₂ = Approx.MStep node k₂ ∧ (∀ arg:C.B node, Agree (k₁ arg) (k₂ arg)) :=
+by
+  cases agree with
+  | AgreeStep node k₁ k₂ h =>
+    exact ⟨node, k₁, k₂, by rfl, by rfl, h⟩
+
+structure M (C:Container.{u₁, u₂}) where
+  approx: ∀ n, Approx C n
+  agrees: ∀ n, Agree (approx n) (approx (.succ n))
+
+def M.node (m: M C) : C.A :=
+  (m.approx 1).node
+
+def M.node_thm (m:M C) (n:Nat) :
+  (m.approx (.succ n)).node = m.node :=
+by
+  induction n with
+  | zero =>
+    rfl
+  | succ n h =>
+    have h₁ := m.agrees (.succ n)
+    have ⟨node, k₁, k₂, h₁, h₂, h₃⟩ := Agree.toExists _ _ h₁
+    rw [h₁] at h
+    rw [h₂]
+    simp only [Approx.node] at *
+    assumption
+
+#check Eq.mp
+#check cast_heq
+
+def Agree.children {n:Nat} (x:Approx C (.succ n)) (y:Approx C (.succ <| .succ n))
+  {i j} {hₑ: HEq i j} (h₁: Agree x y) : Agree (x.children i) (y.children j) := by
+  cases h₁ with
+  | AgreeStep _ _ _ h =>
+    cases hₑ
+    apply h
+
+def M.children (m: M C) (arg:C.B m.node) : M C where
+  approx n :=
+    (m.approx (.succ n)).children (cast (by rw [node_thm]) arg)
+
+  agrees n := by
+    have h₁ := m.agrees (.succ n)
+    apply Agree.children _ _ h₁
+    apply @HEq.trans _ (C.B m.node)
+    apply cast_heq
+    apply HEq.symm
+    apply cast_heq
+
+def M.destruct (m:M C) : C.Obj (M C) where
+  fst := m.node
+  snd := m.children
+
+def Approx.corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) : ∀ n:Nat, Approx C n
+| 0 => .MStop
+| .succ n =>
+  .MStep (f x₀).fst (λ x => Approx.corec f ((f x₀).snd x) n)
+
+def Agree.corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) (n:Nat) :
+  Agree (Approx.corec f x₀ n) (Approx.corec f x₀ (.succ n)) :=
+by
+  induction n generalizing x₀ with
+  | zero =>
+    apply AgreeStop
+  | succ n h₀ =>
+    apply AgreeStep
+    intro x
+    apply h₀
+
+def M.corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) : M C where
+  approx := Approx.corec f x₀
+  agrees := Agree.corec f x₀
+
+#check Container
+
+theorem M.destruct_corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) :
+  (M.corec f x₀).destruct = C.Map (M.corec f) (f x₀) :=
+by
+  simp only [corec, destruct]
+  rfl
+
+#check cast_heq
+
+theorem Eq_from_Heq {α β:Sort u₁} (i:α) (j:β) (h₀:α=β) (h:HEq i j) : cast h₀ i = j :=
+by
+  cases h
+  apply eq_of_heq
+  apply cast_heq
+
+theorem M.bisim.lemma0 :
+  ∀ (x:M C) (n:Nat) i j, HEq i j →  (x.approx (.succ n)).children i = (x.destruct.snd j).approx n :=
+by
+  intro x n i j heq
+  have : i = cast (by rw [node_thm]; simp [destruct]) j := by
+    have : C.B x.destruct.fst = C.B (x.approx (.succ n)).node := by rw [node_thm]; simp [destruct]
+    rw [Eq_from_Heq j i]
+    apply HEq.symm
+    assumption
+
+  simp only [this, children, Approx.node, destruct]
+
+theorem M.bisim.lemma1 (R:M C → M C → Prop)
+  (h₀: ∀ x y, R x y → ∃ node k₁ k₂, destruct x = ⟨node, k₁⟩ ∧ destruct y = ⟨node, k₂⟩ ∧ ∀ i, R (k₁ i) (k₂ i)) :
+  ∀ x y n, R x y → x.approx n = y.approx n :=
+  -- use that (x.approx n).children i = (x.destruct.snd i).approx n
+by
+  intro x y n h₁
+  induction n generalizing x y
+  case zero =>
+    cases x.approx 0
+    cases y.approx 0
+    rfl
+  case succ n h =>
+    have h₂ := x.node_thm n
+    have h₃ := y.node_thm n
+    cases h₄: x.approx (.succ n) with
+    | MStep nodex cx =>
+      cases h₅: y.approx (.succ n) with
+      | MStep nodey cy =>
+        have ⟨node, k₁, k₂, eq₁, eq₂, kR⟩ := h₀ _ _ h₁
+        have h₂ : (Approx.MStep nodex cx).node = node := by
+          have := congrArg Sigma.fst eq₁
+          simp only [destruct] at this
+          rw [h₄] at h₂
+          rw [←this]
+          exact h₂
+
+        --rw [h₄] at h₂
+
+        have h₃ : (Approx.MStep nodey cy).node = node := by
+          have := congrArg Sigma.fst eq₂
+          simp only [destruct] at this
+          rw [h₅] at h₃
+          rw [←this]
+          exact h₃
+
+        --rw [h₅] at h₃
+
+        simp [Approx.node] at h₂ h₃
+        have h₂ := Eq.symm h₂
+        have h₃ := Eq.symm h₃
+        have h₆ := bisim.lemma0 x n
+        have h₇ := bisim.lemma0 y n
+        rw [h₄] at h₆
+        rw [h₅] at h₇
+        simp only [Approx.children] at h₇ h₆
+        induction h₂
+        induction h₃
+        suffices h₈ : ∀ i: C.B node, cx i = cy i by
+          have : cx = cy := by
+            funext i
+            apply h₈
+          rw [this]
+        intro i
+        have h₆ : ∀ i, cx i = (k₁ i).approx n := by
+          have h : ∀ i j, HEq i j → (x.destruct.snd i) = k₁ j := by
+            rw [eq₁]
+            intro i j heq
+            cases heq
+            rfl
+
+          intro i
+          rw [h₆ i (cast (by simp [congrArg Sigma.fst eq₁]) i)]
+          . rw [h]
+            apply cast_heq
+          . apply HEq.symm
+            apply cast_heq
+
+        have h₇ : ∀ i, cy i = (k₂ i).approx n := by
+          have h : ∀ i j, HEq i j → (y.destruct.snd i) = k₂ j := by
+            rw [eq₂]
+            intro i j heq
+            cases heq
+            rfl
+
+          intro i
+          rw [h₇ i (cast (by simp [congrArg Sigma.fst eq₂]) i)]
+          . rw [h]
+            apply cast_heq
+          . apply HEq.symm
+            apply cast_heq
+
+        rw [h₆, h₇]
+        apply h
+        apply kR
+
+theorem M.bisim (R:M C → M C → Prop)
+  (h₀: ∀ x y, R x y → ∃ node k₁ k₂, destruct x = ⟨node, k₁⟩ ∧ destruct y = ⟨node, k₂⟩ ∧ ∀ i, R (k₁ i) (k₂ i)) :
+  ∀ x y, R x y → x = y :=
+by
+  intro x y h₁
+  suffices h₂: x.approx = y.approx by
+    cases x
+    cases y
+    simp only  at h₂
+    simp [h₂]
+  funext n
+  apply bisim.lemma1 R h₀ x y n h₁
+
+#check M
+#check M.corec
+#check M.destruct
+#check M.destruct_corec
+#check M.bisim
+
+def M.construct.automaton : C.Obj (M C) → C.Obj (C.Obj <| M C) := Map destruct
+
+def M.construct (x₀: C.Obj (M C)) : M C :=
+  M.corec M.construct.automaton x₀
+
+def M.construct_def : construct = corec (@construct.automaton C) := by rfl
+
+theorem M.construct_destruct (x:M C) : construct (destruct x) = x :=
+by
+  let R (x y: M C) := x = construct (destruct y)
+  apply bisim R
+  . intro x y h₀
+    have h₀ := congrArg destruct h₀
+    cases h₁:destruct y
+    case mk node k₂ =>
+      rw [h₁] at h₀
+      simp only [construct, destruct_corec, Map] at h₀
+      simp only [construct.automaton, Map] at h₀
+      exists node
+      exists construct ∘ destruct ∘ k₂
+      exists k₂
+      constructor
+      . exact h₀
+      . constructor
+        . rfl
+        . intro i
+          rfl
+  . rfl
+
+def M.destruct_construct : ∀ x: C.Obj (M C), destruct (construct x) = x :=
+by
+  intro ⟨n, k⟩
+  --simp only [construct, construct.automaton]
+  have : (destruct (construct ⟨n, k⟩)).fst = n := by
+    rfl
+
+  simp only [construct]
+  rw [destruct_corec construct.automaton ⟨n, k⟩]
+  simp only [←construct_def]
+  simp only [construct.automaton, Map]
+
+  have : construct ∘ destruct ∘ k = k := by
+    funext x
+    simp [Function.comp]
+    rw [M.construct_destruct]
+
+  rw [this]
+
+
+#check M.construct
+#check M.construct_destruct
+#check M.destruct_construct
+
+end Container
+
+
+
