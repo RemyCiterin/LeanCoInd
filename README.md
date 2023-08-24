@@ -1,2 +1,2 @@
-# IndexedEffects
-a work in progress implementation of indexed effects in Lean4
+# LeanCoInd
+an implementation of coinductives types (M-types and indexed M-types) in Lean
