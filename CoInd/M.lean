@@ -246,58 +246,6 @@ by
 #check M.destruct_corec
 #check M.bisim
 
-def M.construct.automaton : C.Obj (M C) → C.Obj (C.Obj <| M C) := Map destruct
-
-def M.construct (x₀: C.Obj (M C)) : M C :=
-  M.corec M.construct.automaton x₀
-
-def M.construct_def : construct = corec (@construct.automaton C) := by rfl
-
-theorem M.construct_destruct (x:M C) : construct (destruct x) = x :=
-by
-  let R (x y: M C) := x = construct (destruct y)
-  apply bisim R
-  . intro x y h₀
-    have h₀ := congrArg destruct h₀
-    cases h₁:destruct y
-    case mk node k₂ =>
-      rw [h₁] at h₀
-      simp only [construct, destruct_corec, Map] at h₀
-      simp only [construct.automaton, Map] at h₀
-      exists node
-      exists construct ∘ destruct ∘ k₂
-      exists k₂
-      constructor
-      . exact h₀
-      . constructor
-        . rfl
-        . intro i
-          rfl
-  . rfl
-
-def M.destruct_construct : ∀ x: C.Obj (M C), destruct (construct x) = x :=
-by
-  intro ⟨n, k⟩
-  --simp only [construct, construct.automaton]
-  have : (destruct (construct ⟨n, k⟩)).fst = n := by
-    rfl
-
-  simp only [construct]
-  rw [destruct_corec construct.automaton ⟨n, k⟩]
-  simp only [←construct_def]
-  simp only [construct.automaton, Map]
-
-  have : construct ∘ destruct ∘ k = k := by
-    funext x
-    simp [Function.comp]
-    rw [M.construct_destruct]
-
-  rw [this]
-
-
-#check M.construct
-#check M.construct_destruct
-#check M.destruct_construct
 
 end Container
 
