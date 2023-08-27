@@ -197,7 +197,7 @@ def M.unfolded_eq {i:I} : ∀ (x y:Obj C (M C) i),
   Map (λ i x => x.val) x = Map (λ i x => x.val) y → x = y
 | ⟨x, fx⟩, ⟨y, fy⟩ => by
   intro h
-  simp [Map] at h
+  simp only [Map] at h
   have h' := congrArg (λ x => x.fst) h
   cases h'
   have h' := congrFun (Sigma.snd_equals _ _ _ h)
@@ -246,7 +246,7 @@ def M.destruct_corec (f:(i:I) → α i → Obj C α i) {i:I} (x₀:α i) :
 
     let from_x₀_snd := λ y => Container.M.corec (corec.automaton f) ⟨_, b y⟩
     have h₁: from_x₀.snd = from_x₀_snd := by
-      simp [Container.Map] at h
+      simp only [Container.Map] at h
       have h : from_x₀ = Sigma.mk from_x₀.fst from_x₀_snd  := h
       have : from_x₀ = Sigma.mk from_x₀.fst from_x₀.snd := by rfl
       conv at h =>

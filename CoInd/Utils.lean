@@ -47,7 +47,7 @@ by
 
   have : construct ∘ destruct ∘ k = k := by
     funext x
-    simp [Function.comp]
+    simp only [Function.comp]
     rw [M.construct_destruct]
 
   rw [this]
@@ -114,7 +114,7 @@ by
 
   have : (λ x : B C i n => construct <| destruct <| k x) = k := by
     funext x
-    simp [Function.comp]
+    simp only [Function.comp]
     rw [M.construct_destruct]
 
   rw [this]
@@ -122,5 +122,104 @@ by
 #check M.construct
 #check M.construct_destruct
 #check M.destruct_construct
+
+#check Functor
+
+end IContainer
+
+namespace IContainer
+
+class IFunctor {I:Type u₀} (F: (I → Type u₁) → I → Type u₂) where
+  imap : {α β: I → Type u₁} → (f:(i:I) → α i → β i) → {i:I} → F α i → F β i
+
+class IQPF {I:Type u₀} (F: (I → Type u₁) → I → Type u₁) extends IFunctor F where
+  C: IContainer.{u₀, u₁, u₁} I
+  abs: ∀ {α:I → Type u₁} {i:I}, C.Obj α i → F α i
+  repr: ∀ {α: I → Type u₁} {i:I}, F α i → C.Obj α i
+  abs_repr: ∀ {α: I → Type u₁} {i:I} (x:F α i), abs (repr x) = x
+  abs_map: ∀ {α β:I → Type u₁} (f:(i:I) → α i → β i) (p:C.Obj α i), abs (C.Map f p) = imap f (abs p)
+
+
+variable {I: Type u₁}
+variable (F: (I → Type u₁) → I → Type u₁)
+variable [inst:IQPF F]
+
+def IQPF.map_quot
+  (r: (i:I) → M inst.C i → M inst.C i → Prop)
+  {i:I} (x: M inst.C i) : F (λ i => Quot (r i)) i := inst.abs <| Map (λ i => Quot.mk (r i)) (M.destruct x)
+
+#check IQPF.map_quot
+
+#check Quot
+#check Quot.mk
+#check Quot.lift
+#check Quot.ind
+#check Quot.sound
+
+def IQPF.precongr : ((i:I) → M inst.C i → M inst.C i → Prop) →o ((i:I) → M inst.C i → M inst.C i → Prop) where
+  toFun r i x y := map_quot F r x = map_quot F r y
+
+  monotone' := by
+    intro p q h₀ i x y h₁
+    simp only [map_quot] at *
+    simp only [Map] at *
+    generalize M.destruct x = x at *
+    generalize M.destruct y = y at *
+    cases x with
+    | mk nx kx =>
+      cases y with
+      | mk ny ky =>
+        simp only at *
+        have h₂: ∀ (i:I) (a b : M (C F) i), p i a b → Quot.mk (q i) a = Quot.mk (q i) b := by
+          intro i a b h₂
+          apply Quot.sound
+          apply h₀
+          exact h₂
+        let f : (i: I) → Quot (p i) → Quot (q i) := λ i x =>
+          Quot.lift (Quot.mk (q i)) (h₂ i) x
+        have h₄ := congrArg (inst.imap f) h₁
+        rw [←inst.abs_map, ←inst.abs_map] at h₄
+        assumption
+
+abbrev IQPF.pcongr p := pgfp (precongr F) p
+abbrev IQPF.congr := pcongr F ⊥
+
+def IQPF.Mtype i := Quot (congr F i)
+
+def IQPF.destruct.f {i:I} (x:M (C F) i) : F (Mtype F) i :=
+  inst.imap (λ _ x => Quot.mk _ x) <| inst.abs <| M.destruct x
+
+def IQPF.destruct.congr {i:I} :
+  ∀ a b:M (C F) i, congr F i a b → destruct.f F a = destruct.f F b := by
+  intro x y h₁
+  simp only [destruct.f, ←inst.abs_map, Map]
+  cases h₂: M.destruct x with
+  | mk nx kx =>
+    cases h₃: M.destruct y with
+    | mk ny ky =>
+      simp only
+      have h₁ : map_quot F (IQPF.congr F) x = map_quot F (IQPF.congr F) y := by
+        simp only [IQPF.congr, pcongr] at h₁
+        rw [←pgfp.unfold, CompleteLattice.bot_sup] at h₁
+        exact h₁
+      simp only [map_quot, Map, h₂, h₃] at h₁
+      exact h₁
+
+def IQPF.destruct {i:I} : IQPF.Mtype F i → F (IQPF.Mtype F) i :=
+  Quot.lift (destruct.f F) (destruct.congr F)
+
+def IQPF.corec {α: I → Type u₁} (f:(i:I) → α i → F α i) {i:I} (x₀:α i) : Mtype F i :=
+  Quot.mk _ (M.corec (λ i x => inst.repr <| f i x) x₀)
+
+def IQPF.destruct_corec {α: I → Type u₁} (f:(i:I) → α i → F α i) {i:I} (x₀:α i) :
+  destruct F (corec F f x₀) = inst.imap (λ i x => corec F f x) (f i x₀) := by
+  simp only [destruct, corec, destruct.f, M.destruct_corec, inst.abs_map, inst.abs_repr]
+  rw [←inst.abs_repr (f i x₀)]
+  cases repr (f i x₀) with
+  | mk n k =>
+    simp only [←inst.abs_map, Map]
+
+
+
 
 end IContainer
