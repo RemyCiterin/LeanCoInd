@@ -5,22 +5,22 @@ universe u₀ u₁ u₂ u₃ u₄ u₅
 
 
 structure IContainer (I:Type u₀) where
-  A: I → Type u₁
-  B: (i:I) → A i → Type u₂
+  A: I → Type u₀
+  B: (i:I) → A i → Type u₀
   N: (i:I) → (a:A i) → B i a → I
 
 namespace IContainer
 
 variable {I:Type u₀}
 
-def Obj (C:IContainer.{u₀, u₁, u₂} I) (α:I → Type u₃) (i:I) :=
+def Obj (C:IContainer.{u₀} I) (α:I → Type u₃) (i:I) :=
   Σ x:C.A i, ∀ y:C.B i x, α (C.N i x y)
 
-def toContainer (C:IContainer.{u₀, u₁, u₂} I) : Container where
+def toContainer (C:IContainer.{u₀} I) : Container where
   A := Σ i:I, C.A i
   B := λ ⟨i, a⟩ => C.B i a
 
-def WellFormedF (C:IContainer.{u₀, u₁, u₂} I) :
+def WellFormedF (C:IContainer.{u₀} I) :
   (I → Container.M C.toContainer → Prop) →o (I → Container.M C.toContainer → Prop) where
   toFun f i m :=
     m.destruct.1.1 = i ∧ ∀ x, f (C.N m.destruct.1.1 m.destruct.1.2 x) (m.destruct.2 x)
@@ -33,7 +33,7 @@ def WellFormedF (C:IContainer.{u₀, u₁, u₂} I) :
       apply h₀
       apply h₂
 
-variable {C:IContainer.{u₀, u₁, u₂} I}
+variable {C:IContainer.{u₀} I}
 
 def Map {α: I → Type u₃} {β:I → Type u₄} (f:(i:I) → α i → β i) {i:I} : Obj C α i → Obj C β i
 | ⟨x, k⟩ => ⟨x, λ y => f (C.N i x y) (k y)⟩
@@ -46,7 +46,7 @@ def PWellFormed (p:I → Container.M C.toContainer → Prop) (i:I) (x:Container.
 def WellFormed (i:I) (x:Container.M C.toContainer) : Prop :=
   PWellFormed ⊥ i x
 
-def M (C:IContainer.{u₀, u₁, u₂} I) (i:I) := {m:Container.M C.toContainer // WellFormed i m}
+def M (C:IContainer.{u₀} I) (i:I) := {m:Container.M C.toContainer // WellFormed i m}
 
 #check pgfp.unfold
 

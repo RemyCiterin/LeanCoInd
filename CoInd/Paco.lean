@@ -1,12 +1,10 @@
 import Mathlib.Order.FixedPoints
 
-
 #check CompleteLattice
 #check Lattice
 #check OrderHom.lfp
 
 universe u v w
-
 
 section
 

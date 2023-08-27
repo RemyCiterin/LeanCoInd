@@ -4,16 +4,16 @@ import Lean
 universe u₁ u₂ u₃ u₄
 structure Container where
   A: Type u₁
-  B: A → Type u₂
+  B: A → Type u₁
 
 namespace Container
 
-variable {C:Container.{u₁, u₂}}
+variable {C:Container.{u₁}}
 
-def Obj (C:Container.{u₁, u₂}) (α:Type u₃) :=
+def Obj (C:Container.{u₁}) (α:Type u₃) :=
   Σ X:C.A, C.B X → α
 
-def Map {C:Container.{u₁, u₂}} {α:Type u₃} {β: Type u₄} (f:α → β) (x:C.Obj α) : C.Obj β :=
+def Map {C:Container.{u₁}} {α:Type u₃} {β: Type u₄} (f:α → β) (x:C.Obj α) : C.Obj β :=
   ⟨x.fst, f ∘ x.snd⟩
 
 instance (C:Container) : Functor C.Obj where
@@ -47,7 +47,7 @@ by
   | AgreeStep node k₁ k₂ h =>
     exact ⟨node, k₁, k₂, by rfl, by rfl, h⟩
 
-structure M (C:Container.{u₁, u₂}) where
+structure M (C:Container.{u₁}) where
   approx: ∀ n, Approx C n
   agrees: ∀ n, Agree (approx n) (approx (.succ n))
 
