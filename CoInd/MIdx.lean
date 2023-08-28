@@ -1,20 +1,13 @@
 import CoInd.M
 import CoInd.Paco
+import CoInd.Container
 
 universe u₀ u₁ u₂ u₃ u₄ u₅
 
 
-structure IContainer (I:Type u₀) where
-  A: I → Type u₀
-  B: (i:I) → A i → Type u₀
-  N: (i:I) → (a:A i) → B i a → I
-
 namespace IContainer
 
 variable {I:Type u₀}
-
-def Obj (C:IContainer.{u₀} I) (α:I → Type u₃) (i:I) :=
-  Σ x:C.A i, ∀ y:C.B i x, α (C.N i x y)
 
 def toContainer (C:IContainer.{u₀} I) : Container where
   A := Σ i:I, C.A i
@@ -34,9 +27,6 @@ def WellFormedF (C:IContainer.{u₀} I) :
       apply h₂
 
 variable {C:IContainer.{u₀} I}
-
-def Map {α: I → Type u₃} {β:I → Type u₄} (f:(i:I) → α i → β i) {i:I} : Obj C α i → Obj C β i
-| ⟨x, k⟩ => ⟨x, λ y => f (C.N i x y) (k y)⟩
 
 #check WellFormedF
 
@@ -216,7 +206,11 @@ def Sigma.mk_dest {α:Type _} {β: α → Type _} :
   intro ⟨a, b⟩
   rfl
 
-#check Sigma.snd_equals
+#print Sigma.snd_equals.proof_1
+
+def Container.Obj.snd_equals {α} (node:C.toContainer.A) (k₁ k₂:C.toContainer.B node → α) :
+  (show C.toContainer.Obj α from ⟨node, k₁⟩) = ⟨node, k₂⟩ → k₁ = k₂ := by
+  simp [Container.Obj]
 
 #check Sigma.mk.inj_iff
 
@@ -247,13 +241,13 @@ def M.destruct_corec (f:(i:I) → α i → Obj C α i) {i:I} (x₀:α i) :
     let from_x₀_snd := λ y => Container.M.corec (corec.automaton f) ⟨_, b y⟩
     have h₁: from_x₀.snd = from_x₀_snd := by
       simp only [Container.Map] at h
-      have h : from_x₀ = Sigma.mk from_x₀.fst from_x₀_snd  := h
-      have : from_x₀ = Sigma.mk from_x₀.fst from_x₀.snd := by rfl
+      have h : from_x₀ = ⟨from_x₀.fst, from_x₀_snd⟩  := h
+      have : from_x₀ = ⟨from_x₀.fst, from_x₀.snd⟩ := by rfl
       conv at h =>
         lhs
         rw [this]
         rfl
-      exact Sigma.snd_equals _ _ _ h
+      apply Container.Obj.snd_equals _ _ _ h
 
     rw [Sigma.mk.inj_iff]
     constructor

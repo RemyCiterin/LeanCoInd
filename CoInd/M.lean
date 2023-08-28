@@ -1,23 +1,11 @@
 import Qq
 import Lean
+import CoInd.Container
 
-universe u₁ u₂ u₃ u₄
-structure Container where
-  A: Type u₁
-  B: A → Type u₁
 
 namespace Container
-
 variable {C:Container.{u₁}}
 
-def Obj (C:Container.{u₁}) (α:Type u₃) :=
-  Σ X:C.A, C.B X → α
-
-def Map {C:Container.{u₁}} {α:Type u₃} {β: Type u₄} (f:α → β) (x:C.Obj α) : C.Obj β :=
-  ⟨x.fst, f ∘ x.snd⟩
-
-instance (C:Container) : Functor C.Obj where
-  map f x := ⟨x.fst, f ∘ x.snd⟩
 
 inductive Approx (C:Container) : Nat → Type _ where
 | MStep : {n:Nat} → (node:C.A) → (children:C.B node → Approx C n) → Approx C (.succ n)
@@ -142,6 +130,9 @@ by
 
   simp only [this, children, Approx.node, destruct]
 
+#check congrArg
+#check Sigma.mk
+
 theorem M.bisim.lemma1 (R:M C → M C → Prop)
   (h₀: ∀ x y, R x y → ∃ node k₁ k₂, destruct x = ⟨node, k₁⟩ ∧ destruct y = ⟨node, k₂⟩ ∧ ∀ i, R (k₁ i) (k₂ i)) :
   ∀ x y n, R x y → x.approx n = y.approx n :=
@@ -162,7 +153,7 @@ by
       | MStep nodey cy =>
         have ⟨node, k₁, k₂, eq₁, eq₂, kR⟩ := h₀ _ _ h₁
         have h₂ : (Approx.MStep nodex cx).node = node := by
-          have := congrArg Sigma.fst eq₁
+          have := congrArg (λ x => x.1) eq₁
           simp only [destruct] at this
           rw [h₄] at h₂
           rw [←this]
@@ -171,7 +162,7 @@ by
         --rw [h₄] at h₂
 
         have h₃ : (Approx.MStep nodey cy).node = node := by
-          have := congrArg Sigma.fst eq₂
+          have := congrArg (λ x => x.1) eq₂
           simp only [destruct] at this
           rw [h₅] at h₃
           rw [←this]
@@ -203,7 +194,7 @@ by
             rfl
 
           intro i
-          rw [h₆ i (cast (by simp [congrArg Sigma.fst eq₁]) i)]
+          rw [h₆ i (cast (by simp [congrArg (λ x => x.1) eq₁]) i)]
           . rw [h]
             apply cast_heq
           . apply HEq.symm
@@ -217,7 +208,7 @@ by
             rfl
 
           intro i
-          rw [h₇ i (cast (by simp [congrArg Sigma.fst eq₂]) i)]
+          rw [h₇ i (cast (by simp [congrArg (λ x => x.1) eq₂]) i)]
           . rw [h]
             apply cast_heq
           . apply HEq.symm
