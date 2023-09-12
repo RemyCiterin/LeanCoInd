@@ -17,7 +17,7 @@ def Map {C:Container.{u₁}} {α:Type u₃} {β: Type u₄} (f:α → β) (x:C.O
 instance (C:Container) : Functor C.Obj where
   map f x := ⟨x.fst, f ∘ x.snd⟩
 
-def Obj.snd_equals_iff {α:Type u₁} (n:C.A) (kx ky:C.B n → α) :
+def Obj.snd_equals_iff {α:Type u₂} (n:C.A) (kx ky:C.B n → α) :
   (⟨n, kx⟩ : C.Obj α) = ⟨n, ky⟩ ↔ kx = ky := by
   constructor <;> intro h
   . cases h
@@ -45,6 +45,13 @@ variable {C:IContainer.{u₀} I}
 def Map {α: I → Type u₃} {β:I → Type u₄} (f:(i:I) → α i → β i) {i:I} : Obj C α i → Obj C β i
 | ⟨x, k⟩ => ⟨x, λ y => f (C.N i x y) (k y)⟩
 
+def Obj.snd_equals_iff {α:I → Type u₂} {i:I} (n:C.A i) (kx ky:∀ y:C.B i n, α (C.N i n y)) :
+  (⟨n, kx⟩ : C.Obj α i) = ⟨n, ky⟩ ↔ kx = ky := by
+  constructor <;> intro h
+  . cases h
+    rfl
+  . cases h
+    rfl
 
 end IContainer
 

@@ -100,6 +100,88 @@ by
 def Free.destruct_construct {R:Type u₁} (f:Functor C R (Free C R)) : destruct (construct f) = f := by
   simp [construct, destruct, M.destruct_construct]
 
+inductive Free.equivF {R S:Type u₁} (equiv:R → S → Prop) (aux:Free C R → Free C S → Prop) : Free C R → Free C S →  Prop where
+| Pure : ∀ (r:R) (s:S), equiv r s → equivF equiv aux (construct <| .Pure r) (construct <| .Pure s)
+| Free : (node:C.A) → (k₁:C.B node → Free C R) → (k₂:C.B node → Free C S) → (∀ x:C.B node, aux (k₁ x) (k₂ x)) →
+  equivF equiv aux (construct <| .Free node k₁) (construct <| .Free node k₂)
+
+def Free.equivF' {R S:Type u₁} (equiv:R → S → Prop) : (Free C R → Free C S → Prop) →o (Free C R → Free C S → Prop) where
+  toFun := equivF equiv
+  monotone' := by
+    intro p q h₀ x y h₁
+    cases h₁ with
+    | Pure r s h₁ =>
+      apply equivF.Pure _ _ h₁
+    | Free node k₁ k₂ h₁ =>
+      apply equivF.Free
+      intro x
+      apply h₀
+      apply h₁
+
+def Free.pequiv {R S:Type u₁} (equiv: R → S → Prop) (p:Free C R → Free C S → Prop) : Free C R → Free C S → Prop :=
+  pgfp (equivF' equiv) p
+
+def Free.equiv {R S:Type u₁} (equiv: R → S → Prop) : Free C R → Free C S → Prop :=
+  pequiv equiv ⊥
+
+def Free.eq {R:Type u₁} := @Free.equiv C R R Eq
+
+theorem Free.equiv.coinduction {R S:Type u₁} (eq:R → S → Prop) (P:Free C R → Free C S → Prop) :
+  (∀ x y, P x y → equivF eq (P ⊔  pequiv eq P) x y) → ∀ x y, P x y → equiv eq x y := by
+  intro h x y h'
+  apply (pgfp.coinduction (equivF' eq) P).2
+  apply h
+  apply h'
+
+theorem Free.eq.bisim {R:Type u₁}:
+  ∀ (x y:Free C R), Free.eq x y → x = y := by
+  apply M.bisim
+  intro x y h₁
+  simp [eq, equiv, pequiv] at h₁
+  rw [←pgfp.unfold] at h₁
+  cases h₁ with
+  | Pure x y h₁ =>
+    induction h₁
+    exists (A.Pure x)
+    exists (λ e => e.casesOn)
+    exists (λ e => e.casesOn)
+    simp only [construct, M.destruct_construct, inv, true_and]
+    intro x
+    apply x.elim
+  | Free node k₁ k₂ h =>
+    exists (A.Free node)
+    exists k₁
+    exists k₂
+    simp only [construct, M.destruct_construct, inv, true_and]
+    intro x
+    rw [CompleteLattice.bot_sup] at h
+    apply h
+
+
+theorem Free.eq.rfl {R:Type u₁} : ∀ (x:Free C R), eq x x := by
+  have : ∀ (x y:Free C R), x = y → Free.eq x y := by
+    apply Free.equiv.coinduction
+    intro x y h
+    cases h
+    conv =>
+      congr
+      . rfl
+      . rfl
+      . rw [←construct_destruct x]
+      . rw [←construct_destruct x]
+    cases destruct x with
+    | Pure r =>
+      apply equivF.Pure
+      rfl
+    | Free node k =>
+      apply equivF.Free
+      intro y
+      left
+      rfl
+  intro x
+  apply this
+  rfl
+
 def Free.pure {R:Type u₁} (x:R) : Free C R := construct (Functor.Pure x)
 
 def Free.bind.automaton {R S:Type u₁} (f:R → Free C S) : Free C R ⊕ Free C S → Functor C S (Free C R ⊕ Free C S)
@@ -112,9 +194,67 @@ def Free.bind {R S:Type u₁}
   (x:Free C R) (f:R → Free C S) : Free C S :=
   @corec C S (Free C R ⊕ Free C S) (bind.automaton f) (.inl x)
 
+#print Lean.Meta.Simp.Config
+
+theorem Free.bind_inr {R S:Type u₁} (f:R → Free C S) (x:Free C S) :
+  corec (bind.automaton f) (.inr x) = x := by
+  apply Free.eq.bisim
+  have : ∀ x y, x = corec (bind.automaton f) (.inr y) → eq x y := by
+    apply Free.equiv.coinduction
+    intro x y h₁
+    conv =>
+      congr
+      . rfl
+      . rfl
+      . rw [←construct_destruct x]
+      . rw [←construct_destruct y]
+    have h₂ := congrArg destruct h₁
+    clear h₁
+    rw [destruct_corec] at h₂
+    cases hy: destruct y with
+    | Pure r =>
+      simp only [Map, hy, bind.automaton] at h₂
+      rw [h₂]
+      apply equivF.Pure
+      rfl
+    | Free n k =>
+      simp only [Map, bind.automaton, hy] at h₂
+      rw [h₂]
+      apply equivF.Free
+      intro y
+      left
+      rfl
+  apply this
+  rfl
+
+theorem Free.bind_pure {R S:Type u₁} (r:R) (k:R → Free C S) :
+  bind (pure r) k = k r := by
+  rw [←construct_destruct <| k r]
+  rw [←construct_destruct <| bind (pure r) k]
+  simp only [bind, pure, destruct_corec]
+  apply congrArg construct
+  conv =>
+    lhs
+    congr
+    . rfl
+    . simp only [bind.automaton, destruct_construct]
+  cases destruct (k r) with
+  | Pure r =>
+    simp only [Map]
+  | Free n k =>
+    simp only [Map]
+    conv =>
+      lhs
+      congr
+      simp only [Function.comp]
+      intro x
+      rw [bind_inr]
+
 instance : Monad (Free C) where
   pure := Free.pure
   bind := Free.bind
+
+#check λ R (r:R) => (pure r:Free C R) >>= pure
 
 def Free.trigger (node: C.A) : Free C (C.B node) :=
   construct (.Free node pure)

@@ -3,11 +3,11 @@ import CoInd.Paco
 import CoInd.QPF.Basics
 
 
-variable (F: Type u₁ → Type u₁)
+variable {F: Type u₁ → Type u₁}
 variable [inst:QPF F]
 
 open Container in
-def QPF.M.map_quot
+def QPF.M.map_quot (F:Type u₁ → Type u₁) [inst:QPF F]
   (r: M inst.C → M inst.C → Prop)
   (x: M inst.C) : F (Quot r) := inst.abs <| Map (Quot.mk r) (M.destruct x)
 
@@ -20,7 +20,8 @@ def QPF.M.map_quot
 #check Quot.sound
 
 open Container in
-def QPF.M.precongr : (M inst.C → M inst.C → Prop) →o (M inst.C → M inst.C → Prop) where
+def QPF.M.precongr (F:Type u₁ → Type u₁) [inst:QPF F]
+  : (M inst.C → M inst.C → Prop) →o (M inst.C → M inst.C → Prop) where
   toFun r x y := map_quot F r x = map_quot F r y
 
   monotone' := by
@@ -45,14 +46,14 @@ def QPF.M.precongr : (M inst.C → M inst.C → Prop) →o (M inst.C → M inst.
         rw [←inst.abs_map, ←inst.abs_map] at h₄
         assumption
 
-abbrev QPF.M.pcongr p := pgfp (precongr F) p
-abbrev QPF.M.congr := pcongr F ⊥
+abbrev QPF.M.pcongr (F:Type u₁ → Type u₁) [inst:QPF F] p := pgfp (precongr F) p
+abbrev QPF.M.congr (F:Type u₁ → Type u₁) [inst:QPF F] := pcongr F ⊥
 
 #check pgfp.coinduction
 #check le_trans
 
 open Container in
-theorem QPF.M.congr.coinduction (p:M inst.C → M inst.C → Prop) :
+theorem QPF.M.congr.coinduction (F:Type u₁ → Type u₁) [inst:QPF F] (p:M inst.C → M inst.C → Prop) :
   (∀ x y, p x y → precongr F p x y) → ∀ x y, p x y → congr F x y := by
   intro h₀ x y h₁
   simp only [congr, pcongr]
@@ -65,14 +66,14 @@ theorem QPF.M.congr.coinduction (p:M inst.C → M inst.C → Prop) :
   apply h₀
   assumption
 
-def QPF.M := Quot (QPF.M.congr F)
+def QPF.M (F:Type u₁ → Type u₁) [inst:QPF F] := Quot (QPF.M.congr F)
 
 
 def QPF.M.destruct.f (x:Container.M (C F)) : F (M F) :=
   inst.map (λ x => Quot.mk _ x) <| inst.abs <| Container.M.destruct x
 
 def QPF.M.destruct.congr :
-  ∀ a b:Container.M (C F), congr F a b → destruct.f F a = destruct.f F b := by
+  ∀ a b:Container.M (C F), congr F a b → destruct.f a = destruct.f b := by
   intro x y h₁
   simp only [destruct.f, ←inst.abs_map, Container.Map]
   cases h₂: Container.M.destruct x with
@@ -89,13 +90,13 @@ def QPF.M.destruct.congr :
       exact h₁
 
 def QPF.M.destruct : QPF.M F → F (QPF.M F) :=
-  Quot.lift (destruct.f F) (destruct.congr F)
+  Quot.lift (destruct.f) (destruct.congr)
 
 def QPF.M.corec {α: Type u₁} (f:α → F α) (x₀:α) : M F :=
   Quot.mk _ (Container.M.corec (λ x => inst.repr <| f x) x₀)
 
 theorem QPF.M.destruct_corec {α:Type u₁} (f:α → F α) (x₀:α) :
-  destruct F (corec F f x₀) = inst.map (λ x => corec F f x) (f x₀) := by
+  destruct (corec f x₀) = inst.map (λ x => corec f x) (f x₀) := by
   simp only [destruct, corec, destruct.f, Container.M.destruct_corec, inst.abs_map, inst.abs_repr]
   rw [←inst.abs_repr (f x₀)]
   cases repr (f x₀) with
@@ -103,19 +104,19 @@ theorem QPF.M.destruct_corec {α:Type u₁} (f:α → F α) (x₀:α) :
     simp only [←inst.abs_map, Container.Map]
     rfl
 
-def QPF.M.liftp {α:Type u₁}
+def QPF.M.liftp (F:Type u₁ → Type u₁) [inst:Functor F] {α:Type u₁}
   (p: α → Prop) (x:F α) : Prop :=
     ∃ z: F {x:α // p x},
       inst.map (λ x => x.1) z = x
 
-def QPF.M.liftr {α β:Type u₁}
+def QPF.M.liftr (F:Type u₁ → Type u₁) [inst:Functor F] {α β:Type u₁}
   (r: α → β → Prop) : F α → F β → Prop :=
   λ x y => ∃ z: F {p:α × β // r p.1 p.2},
     inst.map (λ x => x.1.1) z = x ∧ inst.map (λ x => x.1.2) z = y
 
 #check pgfp.unfold
 
-theorem QPF.M.imap_spec {α β γ:Type u₁} (f: β → γ) (g:α → β) (x: F α) :
+theorem QPF.M.map_comp {α β γ:Type u₁} (f: β → γ) (g:α → β) (x: F α) :
   inst.map (f ∘ g) x = inst.map f (inst.map g x) := by
   conv =>
     congr
@@ -134,7 +135,7 @@ theorem Container.Map_spec {α β γ:Type u₁} (f: β → γ) (g:α → β) (x:
 theorem QPF.M.bisim_lemma (r: M F → M F → Prop)
   (h₀: ∀ x, r x x)
   (h₁: ∀ x y, r x y →
-    inst.map (Quot.mk r) (destruct F x) = inst.map (Quot.mk r) (destruct F y)) :
+    inst.map (Quot.mk r) (destruct x) = inst.map (Quot.mk r) (destruct y)) :
   ∀ x y, r x y → x = y := by
   intro x
   apply Quot.inductionOn (motive := _) x
@@ -181,17 +182,17 @@ theorem QPF.M.bisim_lemma (r: M F → M F → Prop)
         lhs
         intro i
         rw [←this]
-    rw [Container.Map_spec F, Container.Map_spec F, Container.Map_spec F, Container.Map_spec F]
+    rw [Container.Map_spec, Container.Map_spec, Container.Map_spec, Container.Map_spec]
     rw [inst.abs_map, inst.abs_map, inst.abs_map, inst.abs_map, inst.abs_map, inst.abs_map, h₂]
   . apply h₂
 
 #check Sigma.mk.inj_iff
 
 theorem QPF.M.bisim (r:M F → M F → Prop)
-  (h₀: ∀ x y, r x y → liftr F r (destruct F x) (destruct F y)) :
+  (h₀: ∀ x y, r x y → liftr F r (destruct x) (destruct y)) :
   ∀ x y, r x y → x = y := by
   intro x y h₁
-  apply bisim_lemma F (λ x y => x = y ∨ r x y)
+  apply bisim_lemma (λ x y => x = y ∨ r x y)
   . intro _
     left
     rfl
@@ -204,7 +205,7 @@ theorem QPF.M.bisim (r:M F → M F → Prop)
       clear h₂
       rw [←h₃.1, ←h₃.2]
       clear h₃
-      rw [←imap_spec, ←imap_spec]
+      rw [←map_comp, ←map_comp]
       conv =>
         congr <;> rw [←abs_repr z]
       rw [←abs_map]

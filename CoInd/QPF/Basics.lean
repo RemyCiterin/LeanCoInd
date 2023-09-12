@@ -10,6 +10,22 @@ class QPF (F:Type u → Type u) extends Functor F where
   abs_map: ∀ {α β} (f:α → β) (x:C.Obj α),
     abs (C.Map f x) = f <$> abs x
 
+def QPF.map_comp {F:Type u → Type u} [inst: QPF F] (f:β → γ) (g:α → β) (x: F α) : (f ∘ g) <$> x = f <$> g <$> x :=
+by
+  conv =>
+    congr
+    <;> rw [←inst.abs_repr x]
+  simp only [←inst.abs_map]
+  rfl
+
+def QPF.map_id {F:Type u → Type u} [inst: QPF F] (x:F α) : inst.map id x = x :=
+by
+  conv =>
+    congr
+    <;> rw [←inst.abs_repr x]
+  simp only [←inst.abs_map]
+  rfl
+
 
 class IFunctor {I:Type u₁} (F: (I → Type u₁) → I → Type u₂) where
   imap : {α β: I → Type u₁} → (f:(i:I) → α i → β i) → {i:I} → F α i → F β i

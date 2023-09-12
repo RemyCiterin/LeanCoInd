@@ -36,6 +36,13 @@ def PWellFormed (p:I → Container.M C.toContainer → Prop) (i:I) (x:Container.
 def WellFormed (i:I) (x:Container.M C.toContainer) : Prop :=
   PWellFormed ⊥ i x
 
+#check PWellFormed
+def WellFormed.corec (P: (i:I) → Container.M C.toContainer → Prop) :
+  (∀ i x, P i x → WellFormedF C (P ⊔ PWellFormed P) i x) → ∀ i x, P i x → WellFormed i x := by
+  intro h i x
+  have := (pgfp.coinduction (WellFormedF C) P).2 h
+  apply this
+
 def M (C:IContainer.{u₀} I) (i:I) := {m:Container.M C.toContainer // WellFormed i m}
 
 #check pgfp.unfold
@@ -158,12 +165,11 @@ def M.corec.automaton (f:(i:I) → α i → Obj C α i) :
   (Σ i, α i) → (C.toContainer.Obj (Σ i, α i)) :=
   λ ⟨i, x⟩ => ⟨⟨i, (f i x).1⟩, λ y => ⟨_, (f i x).2 y⟩⟩
 
-
+#check WellFormed.corec
 def M.corec.automaton.wf (f:(i:I) → α i → Obj C α i) :
-  (λ i x => ∃ y, x = Container.M.corec (automaton f) ⟨i, y⟩) ≤ WellFormed :=
+  ∀ i x, (∃ y, x = Container.M.corec (automaton f) ⟨i, y⟩) → WellFormed i x :=
 by
-  simp only [WellFormed, PWellFormed]
-  rw [pgfp.coinduction]
+  apply WellFormed.corec (P := _)
   intro i x ⟨y, h₀⟩
   cases h₀
   constructor

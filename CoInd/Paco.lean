@@ -96,5 +96,9 @@ by
   rw [pgfp.accumulate]
   rw [CompleteLattice.bot_sup]
 
+def pgfp.monotone (p q:L) :
+  p ≤ q → pgfp f p ≤ pgfp f q := by
+  apply (pgfp f).2
+
 end
 
