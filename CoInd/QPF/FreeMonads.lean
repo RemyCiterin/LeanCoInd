@@ -9,10 +9,11 @@ inductive Free.FreeF (F:Type u → Type u) [QPF F] (R:Type u) (α:Type u) where
 | Pure : R → FreeF F R α
 | Free : F α → FreeF F R α
 
--- M F ≈ F (M F)
--- (α -> F (Free F α)) -> α → M F
+-- goal:
+-- cofix: (α -> F (Free F α)) -> α → M F
 -- cofix f x ≈ map (cofix f) (f x)
--- done : M F -> Free F α
+
+-- example:
 -- F α = Cons Nat α
 -- cofix (λ x => if x > 100 then done (repeat x) else Cons x (Cons x (pure (x+1)))) 0
 
@@ -338,6 +339,7 @@ def Free.cofix {R:Type u} (f:R → F (Free F R)) (r:R) : QPF.M F :=
     | .Free f => f
   ) (pure r)
 
+
 def Free.const {R:Type u} (m:QPF.M F) : Free F R :=
   corec (.Free ∘ QPF.M.destruct) m
 
@@ -347,6 +349,4 @@ def Free.eval (m:Free F (QPF.M F)) : QPF.M F :=
     | .Pure m => pure <$> (QPF.M.destruct m)
     | .Free f => f
   ) m
-
-
 
