@@ -102,7 +102,6 @@ instance Free.Monad : Monad (Free F) where
 
 def Free.free {R:Type u} (f:F (Free F R)) : Free F R := construct (.Free f)
 
-
 @[eliminator] theorem Free.by_cases {motive:Free F R → Sort _} (pure:∀ r:R, motive (pure r)) (free:∀ f:F (Free F R), motive (free f)) : ∀ x, motive x := by
   intro x
   rw [←construct_destruct x]
@@ -111,6 +110,75 @@ def Free.free {R:Type u} (f:F (Free F R)) : Free F R := construct (.Free f)
     exact pure r
   | Free f =>
     exact free f
+
+@[simp] theorem Free.destruct_pure {R:Type u} (r:R) : @destruct F inst R (pure r) = FreeF.Pure r := by
+  simp [pure, destruct_construct]
+
+@[simp] theorem Free.destruct_free {R:Type u} (f:F (Free F R)) : destruct (free f) = FreeF.Free f := by
+  simp [free, destruct_construct]
+
+inductive Free.eqF {R:Type u} (aux:Free F R → Free F R → Prop) : Free F R → Free F R → Prop where
+| Pure : (r:R) → Free.eqF aux (pure r) (pure r)
+| Free : (f₁ f₂:F (Free F R)) → QPF.M.liftr F aux f₁ f₂ → Free.eqF aux (free f₁) (free f₂)
+
+def Free.bisim {R:Type u} (r:Free F R → Free F R → Prop)
+  (h₀:∀ x y, r x y → Free.eqF r x y) : ∀ x y, r x y → x = y := by
+  apply QPF.M.bisim
+  intro x y h₁
+  have h₁ := h₀ _ _ h₁
+  cases h₁ with
+  | Pure r =>
+    exists .Pure r
+  | Free f₁ f₂ h =>
+    have ⟨z, h⟩ := h
+    exists .Free z
+    simp only [free, construct, QPF.M.destruct_construct, Functor.map, FreeF.Free.injEq]
+    exact h
+
+def Free.eqF.monotone : Monotone (@Free.eqF F inst R) := by
+  intro f g h₁ p q h₂
+  cases h₂ with
+  | Pure r =>
+    apply Pure
+  | Free f₁ f₂ h₂ =>
+    apply Free
+    have ⟨z, h₂⟩ := h₂
+    simp only [QPF.M.liftr]
+    exists inst.map (λ ⟨⟨x, y⟩, h⟩ => ⟨⟨x, y⟩, by apply h₁; apply h⟩) z
+    constructor
+    . simp only [←QPF.map_comp, Function.comp]
+      exact h₂.1
+    . simp only [←QPF.map_comp, Function.comp]
+      exact h₂.2
+
+
+def Free.eqP {R:Type u} (p:Free F R → Free F R → Prop) := pgfp ⟨Free.eqF, Free.eqF.monotone⟩ p
+def Free.eq {R:Type u} := @eqP F inst R ⊥
+
+def Free.eq.bisim {R:Type u} : ∀ x y:Free F R, eq x y → x = y := by
+  apply Free.bisim
+  intro x y h
+  rw [eq, eqP, ←pgfp.unfold] at h
+  rw [CompleteLattice.bot_sup] at h
+  exact h
+
+def Free.eq.refl {R:Type u} : ∀ x: Free F R, eq x x := by
+  suffices Eq ≤ @eq F inst R by
+    intros; apply this; rfl
+  simp only [eq, eqP, pgfp.coinduction]
+  intro x y h₁
+  induction h₁
+  cases x using by_cases with
+  | pure r =>
+    apply eqF.Pure
+  | free f =>
+    apply eqF.Free
+    exists inst.map (λ x => ⟨⟨x, x⟩, by simp⟩) f
+    simp only [←QPF.map_comp, Function.comp, and_self]
+    apply QPF.map_id
+
+
+
 
 #print QPF.M.liftr
 
@@ -207,28 +275,78 @@ theorem Free.bind_pure.internal {R:Type u} : ∀ x y:Free F R, bind x pure = y �
     rfl
     rfl
 
-inductive Free.eq {R:Type u} (aux:Free F R → Free F R → Prop) : Free F R → Free F R → Prop where
-| Pure : (r:R) → Free.eq aux (pure r) (pure r)
-| Free : (f₁ f₂:F (Free F R)) → QPF.M.liftr F aux f₁ f₂ → Free.eq aux (free f₁) (free f₂)
-
-def Free.bisim {R:Type u} (r:Free F R → Free F R → Prop)
-  (h₀:∀ x y, r x y → Free.eq r x y) : ∀ x y, r x y → x = y := by
-  apply QPF.M.bisim
-  intro x y h₁
-  have h₁ := h₀ _ _ h₁
-  cases h₁ with
-  | Pure r =>
-    exists .Pure r
-  | Free f₁ f₂ h =>
-    have ⟨z, h⟩ := h
-    exists .Free z
-    simp only [free, construct, QPF.M.destruct_construct, Functor.map, FreeF.Free.injEq]
-    exact h
+#check pgfp.coinduction
+#check Free.eqF.monotone
+#print Monotone
 
 theorem Free.bind_bind.internal {R S T:Type u} (k₁:R → Free F S) (k₂:S → Free F T) :
-  ∀ y z, (∃ x, bind (bind x k₁) k₂ = y ∧  bind x (flip bind k₂ ∘ k₁) = z) → y = z := by
-  apply Free.bisim
+  (λ y z => ∃ x, bind (bind x k₁) k₂ = y ∧  bind x (flip bind k₂ ∘ k₁) = z) ≤ Free.eq := by
+  simp only [Free.eq, Free.eqP, pgfp.coinduction]
   intro y z ⟨x, h₁, h₂⟩
   induction h₁
   induction h₂
-  sorry
+  cases x using by_cases with
+  | pure r =>
+    simp only [pure_bind, flip, Function.comp]
+    apply @eqF.monotone F inst T eq
+    . intro x y h
+      apply Or.inr
+      apply pgfp.monotone ⟨eqF, eqF.monotone⟩ ⊥
+      . intro x y h
+        cases h
+      . exact h
+    . have := eq.refl (k₁ r >>= k₂)
+      rw [eq, eqP, ←pgfp.unfold, CompleteLattice.bot_sup] at this
+      exact this
+  | free f =>
+    simp only [←QPF.map_comp, free_bind]
+    let P : Free F T → Free F T → Prop :=(λ y z:Free F T => ∃ x, (x >>= k₁ >>= k₂) = y ∧ x >>= (flip bind k₂ ∘ k₁) = z)
+    apply @eqF.monotone F inst T P
+    . intro x y h
+      apply Or.inl
+      exact h
+    . apply eqF.Free
+      exists inst.map (λ x => ⟨⟨x >>= k₁ >>= k₂, x >>= (flip bind k₂ ∘ k₁)⟩, by exists x⟩) f
+      simp only [←QPF.map_comp]
+      constructor
+      . constructor
+      . constructor
+
+theorem Free.bind_bind {R S T:Type u} (t:Free F R) (k₁:R → Free F S) (k₂:S → Free F T) :
+  t >>= k₁ >>= k₂ = t >>= (flip bind k₂ ∘ k₁) := by
+  have h₁ := bind_bind.internal k₁ k₂ (t >>= k₁ >>= k₂) (t >>= (flip bind k₂ ∘ k₁))
+  have h₂ := Free.eq.bisim (t >>= k₁ >>= k₂) (t >>= (flip bind k₂ ∘ k₁))
+  apply h₂
+  apply h₁
+  exists t
+
+#check QPF.map_comp
+
+instance : Functor (Free F) where
+  map f x := x >>= pure ∘ f
+
+def Free.map_comp {X Y Z:Type u} (f:Y → Z) (g:X → Y) (x:Free F X) : (f ∘ g) <$> x = f <$> g <$> x := by
+  simp [Functor.map, bind_bind, flip, Function.comp]
+
+def Free.map_id {R:Type u} (x:Free F R) : id <$> x = x := by
+  simp [Functor.map]
+
+def Free.cofix {R:Type u} (f:R → F (Free F R)) (r:R) : QPF.M F :=
+  @QPF.M.corec F inst (Free F R) (λ x:Free F R =>
+    match destruct x with
+    | .Pure r => f r
+    | .Free f => f
+  ) (pure r)
+
+def Free.const {R:Type u} (m:QPF.M F) : Free F R :=
+  corec (.Free ∘ QPF.M.destruct) m
+
+def Free.eval (m:Free F (QPF.M F)) : QPF.M F :=
+  @QPF.M.corec F inst (Free F (QPF.M F)) (λ x =>
+    match destruct x with
+    | .Pure m => pure <$> (QPF.M.destruct m)
+    | .Free f => f
+  ) m
+
+
+
