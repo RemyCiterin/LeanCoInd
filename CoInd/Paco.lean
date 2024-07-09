@@ -12,6 +12,81 @@ section
 
 variable {L:Type u} [CompleteLattice L] (f: L →o L)
 
+#print Set
+#print CompleteLattice
+#print SupSet.supₛ
+#print Lattice
+#print Preorder
+
+-- A type class for `indexed scott continuity` with natural numbers as index
+class ScottContinuousNat (foo: L →o L) where
+  scottContinuousNat : ∀ (S: Nat → L),
+    (⨅ i, foo (S i)) ≤ foo (infᵢ S)
+
+
+-- generate an approximation of size `n` of the greatest fixed point of `f`
+def gfp.approx : Nat → L →o L
+| 0 => {toFun := λ _ => ⊤, monotone' := by intro a b _; rfl}
+| n + 1 => {
+    toFun := λ x => f (approx n x),
+    monotone' := by
+      intro a b h₁
+      apply f.monotone'
+      apply (approx n).monotone'
+      assumption
+  }
+
+def gfp.scott : L := ⨅ i, approx f i ⊤
+
+def gfp.scott.tarski [ScottContinuousNat f] :
+  ∀ p, p ≤ f p → p ≤ scott f := by
+  intro p h₁
+  simp only [scott, le_infᵢ_iff]
+  intro i
+  induction i with
+  | zero =>
+    simp only [approx, le_top]
+  | succ n h₂ =>
+    apply le_trans h₁
+    apply f.monotone'
+    assumption
+
+def gfp.scott.scott_f_leq_f_scott_f [inst: ScottContinuousNat f] :
+  scott f ≤ f (scott f) := by
+  have h₁ := @ScottContinuousNat.scottContinuousNat L _ f inst
+  simp only [scott]
+  simp [infᵢ_le_iff]
+  conv at h₁ =>
+    intro S
+    rw [infᵢ_le_iff]
+    rfl
+  intro a h₂
+  have h₃ := λ i => h₂ (.succ i)
+  simp only [approx] at h₃
+  specialize h₁ (λ i => approx f i ⊤) a h₃
+  assumption
+
+def gfp.scott.scott_leq_gfp [inst: ScottContinuousNat f] :
+  scott f ≤ OrderHom.gfp f := by
+  apply OrderHom.le_gfp
+  apply gfp.scott.scott_f_leq_f_scott_f
+
+def gfp.scott.gfp_leq_scott [inst: ScottContinuousNat f] :
+  OrderHom.gfp f ≤ scott f := by
+  apply scott.tarski
+  simp only [OrderHom.map_gfp, le_refl]
+
+def gfp.scott.gfp_eq_scott [inst: ScottContinuousNat f] :
+  OrderHom.gfp f = scott f := by
+  apply (gfp_leq_scott f).antisymm
+  exact scott_leq_gfp f
+
+@[simp] def gfp.scott.unfold [inst: ScottContinuousNat f] :
+  f (scott f) = scott f := by
+  rw [←gfp_eq_scott f]
+  simp [OrderHom.map_gfp]
+
+
 def pgfp.union  (p: L) : L →o L where
   toFun q := f (p ⊔ q)
   monotone' :=
@@ -22,6 +97,54 @@ def pgfp.union  (p: L) : L →o L where
       . simp
       . apply le_sup_of_le_right
         assumption
+
+-- #check ∀ (x y: L) (h: x ≤ y), h.antisymm
+#check LE.le.trans
+#check sup_le_sup
+#check le_sup_left
+#print LinearOrder
+#check le_sup_iff
+#check infₛ_union
+
+-- instance [inst: ScottContinuousNat f] : ScottContinuousNat (pgfp.union f p) where
+--   scottContinuousNat := by
+--     intro S
+--     rw [infᵢ_le_iff]
+--     intro x h₁
+--     simp [pgfp.union] at *
+--     have h₂ : (p ⊔ infᵢ S) = infᵢ (λ i => p ⊔ S i) := by
+--       apply LE.le.antisymm
+--       . rw [le_infᵢ_iff]
+--         intro i
+--         apply sup_le_sup
+--         . trivial
+--         . rw [infᵢ_le_iff]
+--           intro b h₂
+--           apply h₂
+--       . rw [infᵢ_le_iff]
+--         intro y h₂
+--
+--         have h₃ : (⨅ i:Nat, p) = p := by
+--           sorry
+--         have h₄ : (⨅ i: Nat, S i) = infᵢ S := by rfl
+--         have := infᵢ_sup_infᵢ_le (fun _ => p) S
+--         simp only [h₃, h₄] at this
+--         --apply LE.le.trans this
+--
+--
+--
+--
+--     have : p ⊔ infᵢ S ≤ ⨅ i, p ⊔ S i := by sorry
+--     have := f.monotone' this
+--
+--     rw [h₂]
+--     have h₃ := @ScottContinuousNat.scottContinuousNat L _ f inst (λ i => p ⊔ S i)
+--     apply LE.le.trans _ h₃
+--     rw [le_infᵢ_iff]
+--     apply h₁
+
+
+
 
 def pgfp : L →o L where
   toFun p :=
@@ -37,6 +160,14 @@ def pgfp : L →o L where
       . apply le_sup_of_le_left
         assumption
       . simp
+
+def pgfp.approx (p: L) (n: Nat) : L →o L := gfp.approx (pgfp.union f p) n
+
+def pgfp.scott (p: L) : L := gfp.scott (pgfp.union f p)
+
+-- def pgfp.scott.thm (p: L) [ScottContinuousNat f] : pgfp f = pgfp.scott f := by
+--   simp [gfp.scott.gfp_eq_scott (pgfp.union f p)]
+--   sorry
 
 def pgfp.unfold (p:L) :
   f (p ⊔ pgfp f p) = pgfp f p :=

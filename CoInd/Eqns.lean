@@ -1,5 +1,4 @@
 import Lean.Meta.Eqns
-import Mathlib.Lean.Expr
 import Std.Lean.NameMapAttribute
 
 /-! # The `@[eqns]` attribute
@@ -28,7 +27,7 @@ initialize eqnsAttribute : NameMapExtension (Array Name) ←
     add   :=  fun
     | _, `(attr| eqns $[$names]*) =>
       pure <| names.map (fun n => n.getId)
-    | _, _ => Lean.Elab.throwUnsupportedSyntax }
+    | _, s => throw <| .error s "unsuported syntax!" }
 
 initialize Lean.Meta.registerGetEqnsFn (fun name => do
   pure (eqnsAttribute.find? (← getEnv) name))
