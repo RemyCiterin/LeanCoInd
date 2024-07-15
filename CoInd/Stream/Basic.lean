@@ -3,6 +3,8 @@ import CoInd.MIdx
 import CoInd.Paco
 import CoInd.Container
 import CoInd.Utils
+import CoInd.Stream.LTLBase
+import CoInd.Eqns
 
 
 import Lean
@@ -12,7 +14,7 @@ import Qq
 
 universe u v w u₀ u₁ u₂
 
-variable {α: Type u}
+variable {α : Type u}
 
 #print Container
 #print Container.Obj
@@ -24,6 +26,19 @@ def stream (α: Type u) := Container.M (streamC α)
 def stream.head (s: stream α) : α := s.destruct.fst
 
 def stream.tail (s: stream α) : stream α := s.destruct.snd PUnit.unit
+
+def stream.corec {β: Type v} (f: β → α × β) (x₀: β) : stream α :=
+  Container.M.corec (λ x => let (a, b) := f x; ⟨a, λ _ => b⟩) x₀
+
+@[simp] def stream.head_corec {β: Type v} (f: β → α × β) (x₀: β) :
+  head (corec f x₀) = (f x₀).fst := by
+  rfl
+
+@[simp] def stream.tail_corec {β: Type v} (f: β → α × β) (x₀: β) :
+  tail (corec f x₀) = corec f (f x₀).snd := by
+  rfl
+
+-- attribute [eqns stream.head_corec] stream.head
 
 @[simp] def stream.next (s: stream α) : stream α := stream.tail s
 
@@ -51,11 +66,29 @@ def stream.cons (x: α) (s: stream α) : stream α := Container.M.construct ⟨x
     rfl
   rw [Container.M.construct_destruct]
 
+theorem stream.bisim (r: stream α → stream α → Prop)
+  (hyp: ∀ s₁ s₂, r s₁ s₂ → s₁.head = s₂.head ∧ r s₁.tail s₂.tail) :
+  ∀ s₁ s₂, r s₁ s₂ → s₁ = s₂ := by
+  intro s₁ s₂ h₁
+  apply @Container.M.bisim _ r
+  . intro x y h₂
+    exists stream.head x
+    exists λ _ => stream.tail x
+    exists λ _ => stream.tail y
+    constructor
+    . rfl
+    . constructor
+      . specialize hyp x y h₂
+        rw [hyp.1]
+        rfl
+      . intro _
+        exact (hyp x y h₂).2
+  assumption
+
 @[simp] def stream.fby (s₁ s₂: stream α) : stream α :=
   cons (head s₁) s₂
 
-#check Container.M.corec
-def stream.const (x: α) : stream α := Container.M.corec (fun u => ⟨x, fun _ => u⟩) Unit.unit
+def stream.const (x: α) : stream α := corec (λ u => (x, u)) Unit.unit
 
 @[simp] theorem stream.head_const (x: α) :
   head (const x) = x := by rfl
@@ -80,98 +113,338 @@ def stream.first (s: stream α) : stream α := const (head s)
 @[simp] def stream.tail_fby (s₁ s₂: stream α) :
   (s₁.fby s₂).tail = s₂ := by simp
 
-def stream.lift (s₁: stream α) (f: α → β) : stream β :=
-  Container.M.corec (λ s => ⟨f s.head, λ _ => s.tail⟩) s₁
 
-@[simp] def stream.head_lift (f: α → β) :
-  ∀ s: stream α, (s.lift f).head = f s.head := by
+instance : Functor stream where
+  map f := stream.corec (λ s => ⟨f s.head, s.tail⟩)
+
+@[simp] def stream.head_map (f: α → β) :
+  ∀ s: stream α, (f <$> s).head = f s.head := by
   intro s
-  simp only [lift, head]
-  rw [Container.M.destruct_corec]
-  simp only [Container.Map]
+  simp only [Functor.map]
+  rw [head_corec]
 
-@[simp] def stream.tail_lift (f: α → β) :
-  ∀ s: stream α, (s.lift f).tail = s.tail.lift f := by
+@[simp] def stream.tail_map (f: α → β) :
+  ∀ s: stream α, (f <$> s).tail = f <$> s.tail := by
   intro s
-  simp only [lift, tail]
-  rw [Container.M.destruct_corec]
-  simp only [Container.Map]
-  simp only [Function.comp_apply]
+  simp only [Functor.map]
+  rw [tail_corec]
 
-def stream.lift2 (s₁: stream α) (s₂: stream β) (f: α → β → γ) : stream γ :=
-  Container.M.corec (λ (s₁, s₂) => ⟨f s₁.head s₂.head, λ _ => (s₁.tail, s₂.tail)⟩) (s₁, s₂)
+#check Prod
 
-@[simp] def stream.head_lift2 (f: α → β → γ) :
-  ∀ (s₁: stream α) (s₂: stream β), (s₁.lift2 s₂ f).head = f s₁.head s₂.head := by
-  intro s₁ s₂
-  simp only [lift2, head]
-  rw [Container.M.destruct_corec]
-  simp only [Container.Map]
+def stream.mkPair (s₁: stream α) (s₂: stream β) : stream (α × β) :=
+  corec (λ (s₁, s₂) => ((s₁.head, s₂.head), (s₁.tail, s₂.tail))) (s₁, s₂)
 
-@[simp] def stream.tail_lift2 (f: α → β → γ) :
-  ∀ (s₁: stream α) (s₂: stream β), (s₁.lift2 s₂ f).tail = s₁.tail.lift2 s₂.tail f := by
-  intro s₁ s₂
-  simp only [lift2, tail]
-  rw [Container.M.destruct_corec]
-  simp only [Container.Map]
-  simp only [Function.comp_apply]
+@[simp] theorem stream.head_mkPair (s₁: stream α) (s₂: stream β) :
+  head (mkPair s₁ s₂) = (s₁.head, s₂.head) := by rfl
 
-def stream.lift3 (s₁: stream α) (s₂: stream β) (s₃: stream γ) (f: α → β → γ → η) : stream η :=
-  (s₁.lift2 s₂ Prod.mk).lift2 s₃ (λ (x₁, x₂) x₃ => f x₁ x₂ x₃)
+@[simp] theorem stream.tail_mkPair (s₁: stream α) (s₂: stream β) :
+  tail (mkPair s₁ s₂) = mkPair s₁.tail s₂.tail := by rfl
 
-@[simp] def stream.head_lift3 (f: α → β → γ → η) :
-  ∀ (s₁: stream α) (s₂: stream β) (s₃: stream γ), (s₁.lift3 s₂ s₃ f).head = f s₁.head s₂.head s₃.head := by
-  intro s₁ s₂ s₃
-  simp only [lift3, head_lift2]
+def stream.fst (s: stream (α × β)) : stream α :=
+  corec (λ s => (s.head.fst, s.tail)) s
 
-@[simp] def stream.tail_lift3 (f: α → β → γ → η) :
-  ∀ (s₁: stream α) (s₂: stream β) (s₃: stream γ), (s₁.lift3 s₂ s₃ f).tail = s₁.tail.lift3 s₂.tail s₃.tail f := by
-  intro s₁ s₂ s₃
-  simp only [lift3, tail_lift2]
+@[simp] theorem stream.head_fst (s: stream (α × β)) :
+  s.fst.head = s.head.fst := by rfl
 
+@[simp] theorem stream.tail_fst (s: stream (α × β)) :
+  s.fst.tail = s.tail.fst := by rfl
+
+def stream.snd (s: stream (α × β)) : stream β :=
+  corec (λ s => (s.head.snd, s.tail)) s
+
+@[simp] theorem stream.head_snd (s: stream (α × β)) :
+  s.snd.head = s.head.snd := by rfl
+
+@[simp] theorem stream.tail_snd (s: stream (α × β)) :
+  s.snd.tail = s.tail.snd := by rfl
+
+@[simp] theorem stream.mkPair_fst_snd (s: stream (α × β)) :
+  mkPair (fst s) (snd s) = s := by
+  apply bisim (λ s₁ s₂ => s₁ = mkPair s₂.fst s₂.snd)
+  intro s₁ s₂ h₁
+  constructor
+  . rw [h₁]
+    rfl
+  . rw [h₁]
+    rfl
+  rfl
+
+@[simp] theorem stream.fst_mkPair (s₁: stream α) (s₂: stream β) :
+  (mkPair s₁ s₂).fst = s₁ := by
+  apply bisim (λ s₁ s₂ => ∃ y: stream β, s₁ = (mkPair s₂ y).fst)
+  . intro s₁ s₂ ⟨y, h₁⟩
+    rw [h₁]
+    constructor
+    . rfl
+    . exists y.tail
+  exists s₂
+
+@[simp] theorem stream.snd_mkPair (s₁: stream α) (s₂: stream β) :
+  (mkPair s₁ s₂).snd = s₂ := by
+  apply bisim (λ s₁ s₂ => ∃ y: stream α, s₁ = (mkPair y s₂).snd)
+  . intro s₁ s₂ ⟨y, h₁⟩
+    rw [h₁]
+    constructor
+    . rfl
+    . exists y.tail
+  exists s₁
+
+abbrev stream.lift₂ (f: α → β → γ) (s₁: stream α) (s₂: stream β) : stream γ :=
+  (λ (x, y) => f x y) <$> mkPair s₁ s₂
 
 
 instance [HAdd α β γ] : HAdd (stream α) (stream β) (stream γ) where
-  hAdd s₁ s₂ := s₁.lift2 s₂ HAdd.hAdd
+  hAdd s₁ s₂ := stream.lift₂ HAdd.hAdd s₁ s₂
 
 instance [HSub α β γ] : HSub (stream α) (stream β) (stream γ) where
-  hSub s₁ s₂ := s₁.lift2 s₂ HSub.hSub
+  hSub s₁ s₂ := stream.lift₂ HSub.hSub s₁ s₂
 
 instance [HMul α β γ] : HMul (stream α) (stream β) (stream γ) where
-  hMul s₁ s₂ := s₁.lift2 s₂ HMul.hMul
+  hMul s₁ s₂ := stream.lift₂ HMul.hMul s₁ s₂
 
 instance [HDiv α β γ] : HDiv (stream α) (stream β) (stream γ) where
-  hDiv s₁ s₂ := s₁.lift2 s₂ HDiv.hDiv
+  hDiv s₁ s₂ := stream.lift₂ HDiv.hDiv s₁ s₂
 
 instance [HMod α β γ] : HMod (stream α) (stream β) (stream γ) where
-  hMod s₁ s₂ := s₁.lift2 s₂ HMod.hMod
+  hMod s₁ s₂ := stream.lift₂ HMod.hMod s₁ s₂
 
 instance [HAnd α β γ] : HAnd (stream α) (stream β) (stream γ) where
-  hAnd s₁ s₂ := s₁.lift2 s₂ HAnd.hAnd
+  hAnd s₁ s₂ := stream.lift₂ HAnd.hAnd s₁ s₂
 
 instance [HOr α β γ] : HOr (stream α) (stream β) (stream γ) where
-  hOr s₁ s₂ := s₁.lift2 s₂ HOr.hOr
+  hOr s₁ s₂ := stream.lift₂ HOr.hOr s₁ s₂
 
 instance [HXor α β γ] : HXor (stream α) (stream β) (stream γ) where
-  hXor s₁ s₂ := s₁.lift2 s₂ HXor.hXor
+  hXor s₁ s₂ := stream.lift₂ HXor.hXor s₁ s₂
 
-@[simp] theorem stream.head_add [HAdd α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ + s₂) = s₁.head + s₂.head := head_lift2 _ s₁ s₂
-@[simp] theorem stream.head_sub [HSub α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ - s₂) = s₁.head - s₂.head := head_lift2 _ s₁ s₂
-@[simp] theorem stream.head_mul [HMul α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ * s₂) = s₁.head * s₂.head := head_lift2 _ s₁ s₂
-@[simp] theorem stream.head_div [HDiv α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ / s₂) = s₁.head / s₂.head := head_lift2 _ s₁ s₂
-@[simp] theorem stream.head_mod [HMod α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ % s₂) = s₁.head % s₂.head := head_lift2 _ s₁ s₂
-@[simp] theorem stream.head_and [HAnd α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ &&& s₂) = s₁.head &&& s₂.head := head_lift2 _ s₁ s₂
-@[simp] theorem stream.head_or  [HOr  α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ ||| s₂) = s₁.head ||| s₂.head := head_lift2 _ s₁ s₂
-@[simp] theorem stream.head_xor [HXor α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ ^^^ s₂) = s₁.head ^^^ s₂.head := head_lift2 _ s₁ s₂
+@[simp] theorem stream.head_add [HAdd α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ + s₂) = s₁.head + s₂.head := by rfl
+@[simp] theorem stream.head_sub [HSub α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ - s₂) = s₁.head - s₂.head := by rfl
+@[simp] theorem stream.head_mul [HMul α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ * s₂) = s₁.head * s₂.head := by rfl
+@[simp] theorem stream.head_div [HDiv α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ / s₂) = s₁.head / s₂.head := by rfl
+@[simp] theorem stream.head_mod [HMod α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ % s₂) = s₁.head % s₂.head := by rfl
+@[simp] theorem stream.head_and [HAnd α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ &&& s₂) = s₁.head &&& s₂.head := by rfl
+@[simp] theorem stream.head_or  [HOr  α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ ||| s₂) = s₁.head ||| s₂.head := by rfl
+@[simp] theorem stream.head_xor [HXor α β γ] (s₁: stream α) (s₂:stream β) : head (s₁ ^^^ s₂) = s₁.head ^^^ s₂.head := by rfl
 
-@[simp] theorem stream.tail_add [HAdd α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ + s₂) = s₁.tail + s₂.tail := tail_lift2 _ s₁ s₂
-@[simp] theorem stream.tail_sub [HSub α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ - s₂) = s₁.tail - s₂.tail := tail_lift2 _ s₁ s₂
-@[simp] theorem stream.tail_mul [HMul α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ * s₂) = s₁.tail * s₂.tail := tail_lift2 _ s₁ s₂
-@[simp] theorem stream.tail_div [HDiv α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ / s₂) = s₁.tail / s₂.tail := tail_lift2 _ s₁ s₂
-@[simp] theorem stream.tail_mod [HMod α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ % s₂) = s₁.tail % s₂.tail := tail_lift2 _ s₁ s₂
-@[simp] theorem stream.tail_and [HAnd α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ &&& s₂) = s₁.tail &&& s₂.tail := tail_lift2 _ s₁ s₂
-@[simp] theorem stream.tail_or  [HOr  α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ ||| s₂) = s₁.tail ||| s₂.tail := tail_lift2 _ s₁ s₂
-@[simp] theorem stream.tail_xor [HXor α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ ^^^ s₂) = s₁.tail ^^^ s₂.tail := tail_lift2 _ s₁ s₂
+@[simp] theorem stream.tail_add [HAdd α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ + s₂) = s₁.tail + s₂.tail := by rfl
+@[simp] theorem stream.tail_sub [HSub α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ - s₂) = s₁.tail - s₂.tail := by rfl
+@[simp] theorem stream.tail_mul [HMul α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ * s₂) = s₁.tail * s₂.tail := by rfl
+@[simp] theorem stream.tail_div [HDiv α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ / s₂) = s₁.tail / s₂.tail := by rfl
+@[simp] theorem stream.tail_mod [HMod α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ % s₂) = s₁.tail % s₂.tail := by rfl
+@[simp] theorem stream.tail_and [HAnd α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ &&& s₂) = s₁.tail &&& s₂.tail := by rfl
+@[simp] theorem stream.tail_or  [HOr  α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ ||| s₂) = s₁.tail ||| s₂.tail := by rfl
+@[simp] theorem stream.tail_xor [HXor α β γ] (s₁: stream α) (s₂:stream β) : tail (s₁ ^^^ s₂) = s₁.tail ^^^ s₂.tail := by rfl
+
+#check GetElem.getElem
+
+def stream.get (s: stream α) : Nat → α
+| n+1 => s.tail.get n
+| 0 => s.head
+
+instance : GetElem (stream α) Nat α (λ _ _ => True) where
+  getElem s n _ := s.get n
+
+@[simp] theorem stream.get_succ (s: stream α) (n: Nat) :
+  s[n+1] = s.tail[n] := by rfl
+
+@[simp] theorem stream.get_zero (s: stream α) :
+  s[0] = s.head := by rfl
+
+@[simp] theorem stream.get_const (x: α) (n: Nat) :
+  (const x)[n] = x := by
+  induction n with
+  | zero => rfl
+  | succ n h =>
+    simp only [get_succ, tail_const]
+    assumption
+
+@[simp] theorem stream.get_map (f: α → β) (s: stream α) (n: Nat) :
+  (f <$> s)[n] = f s[n] := by
+  induction n generalizing s with
+  | zero => rfl
+  | succ n h =>
+    specialize h s.tail
+    assumption
+
+@[simp] theorem stream.get_mkPair (s₁: stream α) (s₂: stream β) (n: Nat) :
+  (mkPair s₁ s₂)[n] = (s₁[n], s₂[n]) := by
+  induction n generalizing s₁ s₂ with
+  | zero => rfl
+  | succ n h =>
+    specialize h s₁.tail s₂.tail
+    assumption
+
+@[simp] theorem stream.get_fst (s: stream (α × β)) (n: Nat) :
+  s.fst[n] = s[n].fst := by
+  induction n generalizing s with
+  | zero => rfl
+  | succ n h =>
+    specialize h s.tail
+    assumption
+
+@[simp] theorem stream.get_snd (s: stream (α × β)) (n: Nat) :
+  s.snd[n] = s[n].snd := by
+  induction n generalizing s with
+  | zero => rfl
+  | succ n h =>
+    specialize h s.tail
+    assumption
+
+def stream.range (n: Nat) : stream Nat :=
+  corec (λ x => (x, x+1)) n
+
+@[simp] def stream.head_range (n: Nat) :
+  head (range n) = n := by rfl
+
+@[simp] def stream.tail_range (n: Nat) :
+  tail (range n) = range (n+1) := by rfl
+
+@[simp] def stream.get_range (n m: Nat) :
+  (range n)[m] = n + m := by
+  induction m generalizing n with
+  | zero =>
+    rfl
+  | succ m h₁ =>
+    simp only [get_succ, tail_range, h₁ (n+1)]
+    simp_arith
+
+
+def stream.duplicate : stream α → stream (stream α) :=
+  corec (λ s => (s, s.tail))
+
+@[simp] def stream.head_dulicate (s: stream α) :
+  s.duplicate.head = s := by rfl
+
+@[simp] def stream.tail_duplicate (s: stream α) :
+  s.duplicate.tail = s.tail.duplicate := by rfl
+
+abbrev TProp := stream Prop
+
+namespace TProp
+
+inductive UntilFn : TProp × TProp → Prop where
+| Cons : ∀ {P Q}, P.head → UntilFn (P.tail, Q.tail) → UntilFn (P, Q)
+| Nil : ∀ {P Q}, Q.head → UntilFn (P, Q)
+
+
+instance : LTLBase TProp where
+  Entails P Q := ∀ i:Nat, P[i] → Q[i]
+
+  And P Q := (λ (x,y) => x ∧ y) <$> P.mkPair Q
+  Imp P Q := (λ (x,y) => x → y) <$> P.mkPair Q
+  Or  P Q := (λ (x,y) => x ∨ y) <$> P.mkPair Q
+
+  Pure := stream.const
+
+  Next := stream.tail
+
+  Until P Q := UntilFn <$> P.duplicate.mkPair Q.duplicate
+
+instance : LTL TProp where
+  entails_reflexive := λ _ _ h => h
+  entails_transitive := by
+    intro P Q R h₁ h₂ i h₃
+    apply h₂
+    apply h₁
+    apply h₃
+
+  bientails_iff_eq := by
+    intro P Q
+    constructor
+    . intro h₁
+      apply stream.bisim (λ P Q => P ⊣⊢ Q)
+      . intro P Q ⟨h₁, h₂⟩
+        constructor
+        . apply propext
+          constructor
+          . exact h₁ 0
+          . exact h₂ 0
+        . constructor
+          <;> intro i
+          . specialize h₁ (i+1)
+            apply h₁
+          . specialize h₂ (i+1)
+            apply h₂
+      assumption
+    intro h
+    induction h
+    constructor <;> intro _ h' <;> exact h'
+
+  and_elim_l := by
+    intro P Q i h₁
+    simp only [LTLBase.And, stream.get_map, stream.get_mkPair] at h₁
+    exact h₁.left
+
+  and_elim_r := by
+    intro P Q i h₁
+    simp only [LTLBase.And, stream.get_map, stream.get_mkPair] at h₁
+    exact h₁.right
+
+  and_intro := by
+    intro P Q R h₁ h₂ i h₃
+    simp only [LTLBase.And, stream.get_map, stream.get_mkPair]
+    specialize h₁ i h₃
+    specialize h₂ i h₃
+    constructor <;> assumption
+
+  or_intro_l := by
+    intro P Q i h₁
+    simp only [LTLBase.Or, stream.get_map, stream.get_mkPair]
+    exact Or.inl h₁
+
+  or_intro_r := by
+    intro P Q i h₁
+    simp only [LTLBase.Or, stream.get_map, stream.get_mkPair]
+    exact Or.inr h₁
+
+  or_elim := by
+    intro P Q R h₁ h₂ i h₃
+    simp only [LTLBase.Or, stream.get_map, stream.get_mkPair] at h₃
+    cases h₃
+    case inl h₄ =>
+      exact h₁ i h₄
+    case inr h₄ =>
+      exact h₂ i h₄
+
+  imp_intro := by
+    intro P Q R h₁ i h₂
+    simp only [LTLBase.Imp, stream.get_map, stream.get_mkPair]
+    intro h₃
+    apply h₁
+    simp only [LTLBase.And, stream.get_map, stream.get_mkPair]
+    constructor <;> assumption
+
+  imp_elim := by
+    intro P Q E h₁ i
+    specialize h₁ i
+    simp only [LTLBase.And, stream.get_map, stream.get_mkPair]
+    simp only [LTLBase.Imp, stream.get_map, stream.get_mkPair] at h₁
+    intro ⟨h₂, h₃⟩
+    apply h₁ <;>
+    assumption
+
+  pure_intro := by
+    intro ψ P h₁ i
+    simp only [LTLBase.Pure, stream.get_const]
+    intro _
+    assumption
+
+  pure_elim' := by
+    intro ψ P h₁ i h₂
+    simp only [LTLBase.Pure, stream.get_const] at h₂
+    specialize h₁ h₂ i
+    simp only [LTLBase.Pure, stream.get_const] at h₁
+    apply h₁
+    trivial
+
+
+
+
+
+
+
+end TProp
+
 
 
 def node.tenv := List Type
@@ -271,187 +544,3 @@ example : ∀ init, ∀ s₁ s₂: stream Nat,
       simp? -- we can't `simp [h₁]` because of the recursive definition of `s₁`
     . apply h₃ (init+1) s₁.tail s₂.tail
       <;> sorry
-
-
-class LTLBase (PROP: Type u) where
-  entails : PROP → PROP → Prop
-
-  top : PROP
-  bot : PROP
-
-  and : PROP → PROP → PROP
-  or : PROP → PROP → PROP
-  impl : PROP → PROP → PROP
-  Until : PROP → PROP → PROP
-  Next : PROP → PROP
-
-def LTLBase.not {PROP: Type u} [LTLBase PROP] (p: PROP) : PROP := impl p bot
-def LTLBase.iff {PROP: Type u} [LTLBase PROP] (p₁ p₂: PROP) : PROP := and (impl p₁ p₂) (impl p₂ p₁)
-def LTLBase.diamond {PROP: Type u} [LTLBase PROP] (p: PROP) : PROP := Until top p
-def LTLBase.square {PROP: Type u} [LTLBase PROP] (p: PROP) : PROP := not (diamond (not p))
-
-
-declare_syntax_cat LTL -- (behavior := symbol)
-
-syntax:max " ∘ " LTL:40 : LTL -- next
-syntax:max " □ " LTL:40 : LTL -- forall
-syntax:max " ⋄ " LTL:40 : LTL -- exists
-syntax:37 LTL:37 " ∪ " LTL:38 : LTL -- until
-
-syntax:35 LTL:36 " ∧ " LTL:35 : LTL
-syntax:30 LTL:31 " ∨ " LTL:30 : LTL
-syntax:10 LTL:10 " → " LTL:11 : LTL
-syntax:20 LTL:20 " ↔ " LTL:20 : LTL
-syntax:max " ¬ " LTL:40 : LTL
-syntax "⊤" : LTL
-syntax "⊥" : LTL
-
-syntax:max " ( " LTL " ) " : LTL
-
-syntax ident : LTL
-syntax num : LTL
-syntax "[| " LTL "]" : term
-syntax " { " term " } " : LTL
-syntax term " ⊢ " term : term
-
-#check Lean.RBMap
-#print String.length
-#print Ordering
-
-def String.cmp : String → String → Ordering
-| .mk lhs, .mk rhs =>
-  let rec aux : List Char → List Char → Ordering
-    | x :: xs, y :: ys =>
-      if x < y then .lt else if y < x then .gt else aux xs ys
-    | _ :: _, [] => .gt
-    | [], _ :: _ => .lt
-    | [], [] => .eq
-  aux lhs rhs
-
-#check Lean.RBMap.ofList
-
-def LTL.UnopMap : Lean.RBMap String (Nat × Nat) String.cmp :=
-  Lean.RBMap.ofList [
-    ⟨"∘", 100, 40⟩,
-    ⟨"□", 100, 40⟩,
-    ⟨"⋄", 100, 40⟩,
-    ⟨"¬", 100, 40⟩
-  ]
-
-def LTL.BinopMap : Lean.RBMap String (Nat × Nat × Nat) String.cmp :=
-  Lean.RBMap.ofList [
-    ⟨"∪", 37, 37, 38⟩,
-    ⟨"∧", 35, 36, 35⟩,
-    ⟨"∨", 30, 31, 30⟩,
-    ⟨"→", 10, 11, 10⟩,
-    ⟨"↔", 20, 21, 21⟩
-  ]
-
-open Lean PrettyPrinter Delaborator SubExpr Meta
-
-partial def termAsLTL [Monad M] [MonadQuotation M] : TSyntax `term → M (TSyntax `LTL × Nat)
--- ****** Binop ******
-| `(LTLBase.and $t₁ $t₂) => do
-  let ⟨N, N₁, N₂⟩ := LTL.BinopMap.findD "∧" ⟨0, 100, 100⟩
-  let (l₁, n₁) ← termAsLTL t₁
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  let (l₂, n₂) ← termAsLTL t₂
-  let l₂ ← if n₂ < N₂ then `(LTL| ($l₂)) else pure l₂
-  return (← `(LTL| $l₁ ∧ $l₂), N)
-| `(LTLBase.or $t₁ $t₂) => do
-  let ⟨N, N₁, N₂⟩ := LTL.BinopMap.findD "∨" ⟨0, 0, 0⟩
-  let (l₁, n₁) ← termAsLTL t₁
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  let (l₂, n₂) ← termAsLTL t₂
-  let l₂ ← if n₂ < N₂ then `(LTL| ($l₂)) else pure l₂
-  return (← `(LTL| $l₁ ∨ $l₂), N)
-| `(LTLBase.impl $t₁ $t₂) => do
-  let ⟨N, N₁, N₂⟩ := LTL.BinopMap.findD "→" ⟨0, 0, 0⟩
-  let (l₁, n₁) ← termAsLTL t₁
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  let (l₂, n₂) ← termAsLTL t₂
-  let l₂ ← if n₂ < N₂ then `(LTL| ($l₂)) else pure l₂
-  return (← `(LTL| $l₁ → $l₂), N)
-| `(LTLBase.Until $t₁ $t₂) => do
-  let ⟨N, N₁, N₂⟩ := LTL.BinopMap.findD "∪" ⟨0, 0, 0⟩
-  let (l₁, n₁) ← termAsLTL t₁
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  let (l₂, n₂) ← termAsLTL t₂
-  let l₂ ← if n₂ < N₂ then `(LTL| ($l₂)) else pure l₂
-  return (← `(LTL| $l₁ ∪ $l₂), N)
-| `(LTLBase.iff $t₁ $t₂) => do
-  let ⟨N, N₁, N₂⟩ := LTL.BinopMap.findD "↔" ⟨0, 0, 0⟩
-  let (l₁, n₁) ← termAsLTL t₁
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  let (l₂, n₂) ← termAsLTL t₂
-  let l₂ ← if n₂ < N₂ then `(LTL| ($l₂)) else pure l₂
-  return (← `(LTL| $l₁ ↔ $l₂), N)
--- ****** Unop ******
-| `(LTLBase.diamond $t) => do
-  let (N, N₁) := LTL.UnopMap.findD "⋄" ⟨0, 0⟩
-  let (l₁, n₁) ← termAsLTL t
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  return (← `(LTL| ⋄$l₁), N)
-| `(LTLBase.square $t) => do
-  let (N, N₁) := LTL.UnopMap.findD "□" ⟨0, 0⟩
-  let (l₁, n₁) ← termAsLTL t
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  return (← `(LTL| □$l₁), N)
-| `(LTLBase.Next $t) => do
-  let (N, N₁) := LTL.UnopMap.findD "∘" ⟨0, 0⟩
-  let (l₁, n₁) ← termAsLTL t
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  return (← `(LTL| ∘$l₁), N)
-| `(LTLBase.not $t) => do
-  let (N, N₁) := LTL.UnopMap.findD "¬" ⟨0, 0⟩
-  let (l₁, n₁) ← termAsLTL t
-  let l₁ ← if n₁ < N₁ then `(LTL| ($l₁)) else pure l₁
-  return (← `(LTL| ¬$l₁), N)
--- ****** Contants and antiquotation ******
-| `([| $p:LTL ]) => return (← `(LTL| ($p)), 100)
-| `(LTLBase.top) => return (← `(LTL| ⊤), 100)
-| `(LTLBase.bot) => return (← `(LTL| ⊥), 100)
-| `($t:ident) => do
-  return (.mk t.1, 100)
-| `($t:term) => return (← `(LTL| {$t}), 100)
-
-@[app_unexpander LTLBase.entails]
-def unexpandEntails : Unexpander
-| `(term| LTLBase.entails $t₁:term $t₂:term) => do
-  let l₁ ← termAsLTL t₁
-  let l₂ ← termAsLTL t₂
-  `([| $l₁.fst ] ⊢ [| $l₂.fst ])
-| _ => throw ()
-
-macro_rules
-| `($t₁:term ⊢ $t₂:term) => `(LTLBase.entails $t₁ $t₂)
-| `([| $t₁:LTL ∧ $t₂:LTL]) => `(LTLBase.and [|$t₁] [|$t₂])
-| `([| $t₁:LTL ∨ $t₂:LTL]) => `(LTLBase.or [|$t₁] [|$t₂])
-| `([| $t₁:LTL → $t₂:LTL]) => `(LTLBase.impl [|$t₁] [|$t₂])
-| `([| $t₁:LTL ↔ $t₂:LTL]) => `(LTLBase.iff [|$t₁] [|$t₂])
-| `([| $t₁:LTL ∪ $t₂:LTL]) => `(LTLBase.Until [|$t₁] [|$t₂])
-| `([| □ $t₁:LTL]) => `(LTLBase.square [|$t₁])
-| `([| ⋄ $t₁:LTL]) => `(LTLBase.diamond [|$t₁])
-| `([| ¬ $t₁:LTL]) => `(LTLBase.not [|$t₁])
-| `([| ∘ $t₁:LTL]) => `(LTLBase.Next [|$t₁])
-| `([| ( $t₁:LTL ) ]) => `([|$t₁])
-| `([| ⊤ ]) => `(LTLBase.top)
-| `([| ⊥ ]) => `(LTLBase.bot)
-| `([| { $t₁:term } ]) => `($t₁)
-| `([| $i:ident ]) => `($i)
-
-#check ∀ A B C D: Prop, (¬A) ∧ B ∧ (C → D)
-#check ∀ (PROP: Type u) [LTLBase PROP] (A B C D: PROP), [| (¬(A ∪ B)) ∪ (C ∪ D) ] ⊢ [|(A ↔ B) ↔ (C ↔ D)]
-
-#print Transitive
-#print Reflexive
-
-class LTL (PROP: Type u) [inst: LTLBase PROP] where
-  bientails (P Q: PROP) := (P ⊢ Q) ∧ (Q ⊢ P)
-
-  entails_transitive: Transitive inst.entails
-  entails_reflexive: Reflexive inst.entails
-
-  bientails_iff (P Q: PROP) : (bientails P Q) ↔ (P = Q)
-
-  and_intro (P Q R: PROP) : (P ⊢ Q) → (P ⊢ R) → (P ⊢ [| Q ∧ R ])

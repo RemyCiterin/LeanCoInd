@@ -1,10 +1,14 @@
 import Mathlib.Order.FixedPoints
+import Mathlib.Order.CompleteBooleanAlgebra
 import Qq
 import Lean
 
 #check CompleteLattice
 #check Lattice
 #check OrderHom.lfp
+
+#check inferInstanceAs <| CompleteDistribLattice (∀ x:Nat, Nat → Prop)
+#check inferInstanceAs <| CompleteBooleanAlgebra (∀ x:Nat, {y: Nat // y == x} → Prop)
 
 universe u v w
 
@@ -98,53 +102,27 @@ def pgfp.union  (p: L) : L →o L where
       . apply le_sup_of_le_right
         assumption
 
--- #check ∀ (x y: L) (h: x ≤ y), h.antisymm
-#check LE.le.trans
-#check sup_le_sup
-#check le_sup_left
-#print LinearOrder
-#check le_sup_iff
-#check infₛ_union
-
--- instance [inst: ScottContinuousNat f] : ScottContinuousNat (pgfp.union f p) where
---   scottContinuousNat := by
---     intro S
---     rw [infᵢ_le_iff]
---     intro x h₁
---     simp [pgfp.union] at *
---     have h₂ : (p ⊔ infᵢ S) = infᵢ (λ i => p ⊔ S i) := by
---       apply LE.le.antisymm
---       . rw [le_infᵢ_iff]
---         intro i
---         apply sup_le_sup
---         . trivial
---         . rw [infᵢ_le_iff]
---           intro b h₂
---           apply h₂
---       . rw [infᵢ_le_iff]
---         intro y h₂
---
---         have h₃ : (⨅ i:Nat, p) = p := by
---           sorry
---         have h₄ : (⨅ i: Nat, S i) = infᵢ S := by rfl
---         have := infᵢ_sup_infᵢ_le (fun _ => p) S
---         simp only [h₃, h₄] at this
---         --apply LE.le.trans this
---
---
---
---
---     have : p ⊔ infᵢ S ≤ ⨅ i, p ⊔ S i := by sorry
---     have := f.monotone' this
---
---     rw [h₂]
---     have h₃ := @ScottContinuousNat.scottContinuousNat L _ f inst (λ i => p ⊔ S i)
---     apply LE.le.trans _ h₃
---     rw [le_infᵢ_iff]
---     apply h₁
+-- if L is a `CompleteDistribLattice`, then `pgfp.union f p` is Scott continuous if `f` is Scott continuous
+instance {L:Type u} [CompleteDistribLattice L] {f: L →o L} {p: L} [inst: ScottContinuousNat f] : ScottContinuousNat (pgfp.union f p) where
+  scottContinuousNat := by
+    intro S
 
 
+    have h₂ : (⨅ i, p ⊔ S i) ≤ p ⊔ infᵢ S := by
+      have := sup_infᵢ_eq p S
+      rw [←this]
+      simp only [ge_iff_le, le_infᵢ_iff, le_refl]
 
+    rw [infᵢ_le_iff]
+    intro x h₁
+    simp [pgfp.union] at *
+
+    have h₃ := f.monotone' h₂
+    apply LE.le.trans _ h₃
+    have h₄ := @ScottContinuousNat.scottContinuousNat L _ f inst (λ i => p ⊔ S i)
+    apply LE.le.trans _  h₄
+    rw [le_infᵢ_iff]
+    exact h₁
 
 def pgfp : L →o L where
   toFun p :=

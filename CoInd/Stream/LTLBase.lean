@@ -129,41 +129,36 @@ class LTL (PROP: Type u) extends LTLBase PROP where
 
   bientails_iff_eq (P Q: PROP) : LTLBase.BiEntails P Q ↔ P = Q
 
-  and_elim_l {P Q: PROP} : P ∧ Q ⊢ P
-  and_elim_r {P Q: PROP} : P ∧ Q ⊢ Q
-  and_intro {P Q R: PROP} : (P ⊢ Q) → (P ⊢ R) → P ⊢ Q ∧ R
+  -- logic reasoning
 
-  or_intro_l {P Q: PROP} : P ⊢ P ∨ Q
-  or_intro_r {P Q: PROP} : Q ⊢ P ∨ Q
-  or_elim {P Q R: PROP} : (P ⊢ R) → (Q ⊢ R) → P ∨ Q ⊢ R
+  and_elim_l {P Q: PROP} : P ∧ Q ⊢ P -- ∀ H, H ⊢ P ∧ Q → P
+  and_elim_r {P Q: PROP} : P ∧ Q ⊢ Q -- ∀ H, H ⊢ P ∧ Q → Q
+  and_intro {P Q R: PROP} : (P ⊢ Q) → (P ⊢ R) → P ⊢ Q ∧ R -- ∀ H, H ⊢ P → Q → P ∧ Q
 
-  imp_intro {P Q R: PROP} : (P ∧ Q ⊢ R) → P ⊢ (Q → R)
+  or_intro_l {P Q: PROP} : P ⊢ P ∨ Q -- ∀ H, H ⊢ P → P ∨ Q
+  or_intro_r {P Q: PROP} : Q ⊢ P ∨ Q -- ∀ H, H ⊢ Q → P ∨ Q
+  or_elim {P Q R: PROP} : (P ⊢ R) → (Q ⊢ R) → P ∨ Q ⊢ R -- ∀ H, H ⊢ (P → R) → (Q → R) → (P ∨ Q) → R
+
+  imp_intro {P Q R: PROP} : (P ∧ Q ⊢ R) → P ⊢ (Q → R) -- ⊢
   imp_elim {P Q R: PROP} : (P ⊢ Q → R) → (P ∧ Q ⊢ R)
 
-  pure_intro {ψ: Prop} {P: PROP} : ψ → (P ⊢ ⌜ φ ⌝)
+  pure_intro {ψ: Prop} {P: PROP} : ψ → (P ⊢ ⌜ ψ ⌝)
   pure_elim' {ψ: Prop} {P: PROP} : (ψ → ⊢ P) → ⌜ψ⌝ ⊢ P
 
+  -- temporal reasoning
 
-namespace StreamProp
+  next_self_dual {P: PROP} : ¬∘P ⊣⊢ ∘¬P
 
-def TProp := Nat → Prop
+  next_imp_distributivity {P Q: PROP} : ⊢ ∘(P → Q) → (∘P → ∘Q)
 
-instance : LTLBase TProp where
-  Entails p₁ p₂ := ∀ n, p₁ n → p₂ n
-  Imp p₁ p₂ n := p₁ n → p₂ n
-  And p₁ p₂ n := p₁ n ∧ p₂ n
-  Or p₁ p₂ n := p₁ n ∨ p₂ n
-  Pure p _ := p
-  Until p₁ p₂ n := ∃ k, n ≤ k ∧ (∀ i, n ≤ i → i < k → p₁ i) ∧ p₂ k
-  Next p n := p (n+1)
+  square_imp_distributivity {P Q: PROP} : ⊢ □(P → Q) → (□P → □Q)
 
-instance : LTL TProp where
-  entails_transitive :=
-    fun p₁ p₂ p₃ h₁ h₂ n h₃ => h₂ n (h₁ n h₃)
+  until_unfold {P Q: PROP} : P ∪ Q ⊣⊢ Q ∨ (P ∧ ∘(P ∪ Q))
 
-  entails_reflexive := fun x n h₁ => h₁
+  diamond_intro {P Q: PROP} : ⊢ (P ∪ Q) → ⋄Q
 
-end StreamProp
+unif_hint [LTLBase PROP] (P Q : PROP) where |- tprop(P ↔ Q) ≟ tprop((P → Q) ∧ (Q → P))
+
 
 def LTLBase.Entails.trans {P Q R: PROP} [LTL PROP] (h₁: P ⊢ Q) (h₂: Q ⊢ R) : P ⊢ R := LTL.entails_transitive h₁ h₂
 def LTLBase.BiEntails.trans {P Q R: PROP} [LTL PROP] (h₁: P ⊣⊢ Q) (h₂: Q ⊣⊢ R) : P ⊣⊢ R := ⟨h₁.1.trans h₂.1, h₂.2.trans h₁.2⟩
@@ -174,9 +169,41 @@ namespace LTL
 variable {PROP: Type u} [inst: LTL PROP]
 
 
+def And.left {H: PROP} (P Q: PROP) : H ⊢ P ∧ Q → P :=
+  imp_intro <| and_elim_r.trans and_elim_l
+
+def And.right {H: PROP} (P Q: PROP) : H ⊢ P ∧ Q → Q :=
+  imp_intro <| and_elim_r.trans and_elim_r
+
+def And.mk {H: PROP} {P Q: PROP} : H ⊢ P → Q → P ∧ Q :=
+  imp_intro <| imp_intro <| and_intro (and_elim_l.trans and_elim_r) and_elim_r
+
+def and_top {P: PROP} : tprop(P ∧ ⊤) = P := by
+  apply (bientails_iff_eq _ _).1
+  constructor
+  . exact and_elim_l
+  . apply and_intro
+    . exact .rfl
+    . apply pure_intro
+      trivial
+
+def top_and {P: PROP} : tprop(⊤ ∧ P) = P := by
+  apply (bientails_iff_eq _ _).1
+  constructor
+  . exact and_elim_r
+  . apply and_intro
+    . apply pure_intro
+      trivial
+    . exact .rfl
+
+
+#check square_imp_distributivity
+
 instance entails_trans : Trans (α := PROP) inst.Entails inst.Entails inst.Entails where
   trans h₁ h₂ := h₁.trans h₂
 
+#check entails_trans.trans
+#check LTL.and_elim_l
 theorem and_elim_l' {P Q R: PROP} (h: P ⊢ R) : P ∧ Q ⊢ R := entails_trans.trans and_elim_l h
 theorem and_elim_r' {P Q R: PROP} (h: Q ⊢ R) : P ∧ Q ⊢ R := entails_trans.trans and_elim_r h
 
