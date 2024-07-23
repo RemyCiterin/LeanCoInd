@@ -89,6 +89,65 @@ open Lean Lean.Expr Lean.Meta Lean.PrettyPrinter.Delaborator Lean.PrettyPrinter.
 --  | ~q(tprop($A ∧ B)), .conjunction (x :: xs) =>
 --    let h ← casesCore (.conjunction xs) u prop ltl k q(tprop($P ∧ $A)) Q ()
 
+-- take a list of ident and revert them
+-- if `h: P`, and the hypothesis is of the form `(R := ... ∧ P ∧ ...) ⊢ Q`
+--def revertCore (names: List Ident) (u: Level) (prop: Q(Type u))
+--  (ltl: Q(LTL $prop)) (k: ∀ P Q: Q($prop), Hyps ltl P → MetaM Q($P ⊢ $Q))
+--  (P Q: Q($prop)) (hyps: Hyps ltl P) : MetaM Q($P ⊢ $Q)
+
+#check Subtype
+
+#check Hyps.hyp
+#check Hyps.and
+
+#check LTL.bientails_iff_eq
+#check LTL.and_assoc
+#check LTL.and_comm
+#check LTL.and_symm
+
+structure Hyps.revert.Result {u: Level} {prop: Q(Type u)} (ltl: Q(LTL $prop)) (P: Q($prop)) where
+  response : Q($prop)
+  rest : Q($prop)
+  hyps : Hyps ltl rest
+  rel : Q($P = tprop($rest ∧ $response))
+
+def Hyps.revert {u: Level} {prop: Q(Type u)} {ltl: Q(LTL $prop)} {P: Q($prop)}
+  (hyps: Hyps ltl P) (name: Name) : Option <| @Hyps.revert.Result u prop ltl P :=
+  match hyps with
+  | .hyp R n _ =>
+    if n = name then .some <| ⟨R, q(tprop(⊤)), (.nul ⟨⟩), q(by simp only [LTL.top_and])⟩ else .none
+  | @Hyps.and _ _ _ R S _ h₁ lhs rhs =>
+    match (lhs.revert name, rhs.revert name) with
+    | (_, .some <| .mk req rest rhs' rel) =>
+      .some <| .mk req q(tprop($R ∧ $rest)) (.and ⟨⟩ lhs rhs')
+        q(by
+          simp [«$rel»]
+          apply Eq.symm
+          rw [(LTL.bientails_iff_eq tprop((«$R» ∧ «$rest») ∧ «$req») tprop(«$R» ∧ «$rest» ∧ «$req»)).1]
+          apply LTL.and_assoc
+        )
+    | (.some <| .mk req rest lhs' rel, .none) =>
+      .some <| .mk req q(tprop($rest ∧ $S)) (.and ⟨⟩ lhs' rhs)
+        q(by
+          simp only [«$rel»]
+          rw [(LTL.bientails_iff_eq tprop((«$rest» ∧ «$S») ∧ «$req») tprop((«$rest» ∧ «$req») ∧ «$S»)).1]
+          apply LTLBase.BiEntails.trans _ LTL.and_comm
+          apply LTLBase.BiEntails.trans _ LTL.and_assoc
+          constructor
+          . apply LTL.and_intro
+            . apply LTLBase.Entails.trans _ LTL.and_comm.1
+              apply LTL.and_elim_l
+            . apply LTL.and_elim_r
+          . apply LTL.and_intro
+            . apply LTLBase.Entails.trans _ LTL.and_comm.1
+              apply LTL.and_elim_l
+            . apply LTL.and_elim_r
+        )
+    | (.none, .none) => .none
+  | _ => .none
+
+
+
 
 #check LTL.or_elim
 

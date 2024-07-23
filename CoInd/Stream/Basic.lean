@@ -3,7 +3,7 @@ import CoInd.MIdx
 import CoInd.Paco
 import CoInd.Container
 import CoInd.Utils
-import CoInd.Stream.LTLBase
+--import CoInd.Stream.LTLBase
 import CoInd.Eqns
 
 
@@ -312,138 +312,11 @@ def stream.range (n: Nat) : stream Nat :=
 def stream.duplicate : stream α → stream (stream α) :=
   corec (λ s => (s, s.tail))
 
-@[simp] def stream.head_dulicate (s: stream α) :
+@[simp] def stream.head_duplicate (s: stream α) :
   s.duplicate.head = s := by rfl
 
 @[simp] def stream.tail_duplicate (s: stream α) :
   s.duplicate.tail = s.tail.duplicate := by rfl
-
-abbrev TProp := stream Prop
-
-namespace TProp
-
-inductive UntilFn : TProp × TProp → Prop where
-| Cons : ∀ {P Q}, P.head → UntilFn (P.tail, Q.tail) → UntilFn (P, Q)
-| Nil : ∀ {P Q}, Q.head → UntilFn (P, Q)
-
-
-instance : LTLBase TProp where
-  Entails P Q := ∀ i:Nat, P[i] → Q[i]
-
-  And P Q := (λ (x,y) => x ∧ y) <$> P.mkPair Q
-  Imp P Q := (λ (x,y) => x → y) <$> P.mkPair Q
-  Or  P Q := (λ (x,y) => x ∨ y) <$> P.mkPair Q
-
-  Pure := stream.const
-
-  Next := stream.tail
-
-  Until P Q := UntilFn <$> P.duplicate.mkPair Q.duplicate
-
-instance : LTL TProp where
-  entails_reflexive := λ _ _ h => h
-  entails_transitive := by
-    intro P Q R h₁ h₂ i h₃
-    apply h₂
-    apply h₁
-    apply h₃
-
-  bientails_iff_eq := by
-    intro P Q
-    constructor
-    . intro h₁
-      apply stream.bisim (λ P Q => P ⊣⊢ Q)
-      . intro P Q ⟨h₁, h₂⟩
-        constructor
-        . apply propext
-          constructor
-          . exact h₁ 0
-          . exact h₂ 0
-        . constructor
-          <;> intro i
-          . specialize h₁ (i+1)
-            apply h₁
-          . specialize h₂ (i+1)
-            apply h₂
-      assumption
-    intro h
-    induction h
-    constructor <;> intro _ h' <;> exact h'
-
-  and_elim_l := by
-    intro P Q i h₁
-    simp only [LTLBase.And, stream.get_map, stream.get_mkPair] at h₁
-    exact h₁.left
-
-  and_elim_r := by
-    intro P Q i h₁
-    simp only [LTLBase.And, stream.get_map, stream.get_mkPair] at h₁
-    exact h₁.right
-
-  and_intro := by
-    intro P Q R h₁ h₂ i h₃
-    simp only [LTLBase.And, stream.get_map, stream.get_mkPair]
-    specialize h₁ i h₃
-    specialize h₂ i h₃
-    constructor <;> assumption
-
-  or_intro_l := by
-    intro P Q i h₁
-    simp only [LTLBase.Or, stream.get_map, stream.get_mkPair]
-    exact Or.inl h₁
-
-  or_intro_r := by
-    intro P Q i h₁
-    simp only [LTLBase.Or, stream.get_map, stream.get_mkPair]
-    exact Or.inr h₁
-
-  or_elim := by
-    intro P Q R h₁ h₂ i h₃
-    simp only [LTLBase.Or, stream.get_map, stream.get_mkPair] at h₃
-    cases h₃
-    case inl h₄ =>
-      exact h₁ i h₄
-    case inr h₄ =>
-      exact h₂ i h₄
-
-  imp_intro := by
-    intro P Q R h₁ i h₂
-    simp only [LTLBase.Imp, stream.get_map, stream.get_mkPair]
-    intro h₃
-    apply h₁
-    simp only [LTLBase.And, stream.get_map, stream.get_mkPair]
-    constructor <;> assumption
-
-  imp_elim := by
-    intro P Q E h₁ i
-    specialize h₁ i
-    simp only [LTLBase.And, stream.get_map, stream.get_mkPair]
-    simp only [LTLBase.Imp, stream.get_map, stream.get_mkPair] at h₁
-    intro ⟨h₂, h₃⟩
-    apply h₁ <;>
-    assumption
-
-  pure_intro := by
-    intro ψ P h₁ i
-    simp only [LTLBase.Pure, stream.get_const]
-    intro _
-    assumption
-
-  pure_elim' := by
-    intro ψ P h₁ i h₂
-    simp only [LTLBase.Pure, stream.get_const] at h₂
-    specialize h₁ h₂ i
-    simp only [LTLBase.Pure, stream.get_const] at h₁
-    apply h₁
-    trivial
-
-
-
-
-
-
-
-end TProp
 
 
 
@@ -502,6 +375,40 @@ instance {P: α → Prop} : ScottContinuousNat (stream.forallSF P) where
 
 def stream.forallS (P: α → Prop) : stream α → Prop := gfp.scott (forallSF P)
 
+def stream.forallS.unfold {P: α → Prop} {s: stream α} :
+  forallS P s = (P s.head ∧ forallS P s.tail) := by
+  conv =>
+    lhs
+    rw [forallS, ←gfp.scott.unfold]
+    rfl
+
+
+def stream.forallS.approx (P: α → Prop) : Nat → stream α → Prop
+| n+1, s => P s.head ∧ approx P n s.tail
+| 0, _ => True
+
+#check gfp.approx
+#print gfp.scott
+
+def stream.forallS.rewrite_aux (P: α → Prop) (n: Nat) (s: stream α) :
+  gfp.approx (forallSF P) n ⊤ s = approx P n s := by
+  induction n generalizing s with
+  | zero => rfl
+  | succ n h₁ =>
+    specialize h₁ s.tail
+    rw [approx, ←h₁]
+    rfl
+
+def stream.forallS.rewrite (P:α → Prop) (s: stream α) :
+  forallS P s = (∀ n:Nat, approx P n s) := by
+  simp only [forallS, infᵢ_apply, infᵢ_Prop_eq, gfp.scott]
+  conv =>
+    rhs
+    intro n
+    rw [←rewrite_aux P n s]
+    rfl
+
+
 #check congrArg
 #check infᵢ_apply
 #check infᵢ_Prop_eq
@@ -544,3 +451,273 @@ example : ∀ init, ∀ s₁ s₂: stream Nat,
       simp? -- we can't `simp [h₁]` because of the recursive definition of `s₁`
     . apply h₃ (init+1) s₁.tail s₂.tail
       <;> sorry
+
+
+
+abbrev stream.TProp (α: Type u) := stream α → Prop
+
+namespace stream.TProp
+
+def square (p: TProp α) : TProp α := λ s => forallS p s.duplicate
+
+inductive diamond (P: stream α → Prop) : TProp α where
+| cons : ∀ s:stream α, diamond P s.tail → diamond P s
+| nil : ∀ s:stream α, P s → diamond P s
+
+inductive Until (P Q: stream α → Prop) : TProp α where
+| cons : ∀ s: stream α, P s → Until P Q s.tail → Until P Q s
+| nil : ∀ s: stream α, Q s → Until P Q s
+
+def next (p: TProp α) : TProp α := λ s => p s.tail
+
+def hd (p: TProp α) : TProp α := λ s => p (const s.head)
+
+def pure (p: α → Prop) : TProp α := λ s => p s.head
+
+def arrow (p q: TProp α) : TProp α := λ s => p s → q s
+
+def not (p: TProp α) : TProp α := λ s => ¬p s
+
+def diamond.unfold (p: TProp α) (s: stream α) :
+  diamond p s = (p s ∨ next (diamond p) s) := by
+  apply propext
+  constructor
+  . intro h₁
+    cases h₁ with
+    | cons _ h₁ =>
+      apply Or.inr
+      exact h₁
+    | nil _ h₁ =>
+      apply Or.inl
+      exact h₁
+  . intro h₁
+    apply Or.elim h₁ <;> intro h₂
+    . apply diamond.nil
+      assumption
+    . apply diamond.cons
+      exact h₂
+
+def square.unfold (p: TProp α) (s: stream α) :
+  square p s = (p s ∧ next (square p) s) := by
+  conv =>
+    lhs
+    rw [square, forallS, ←gfp.scott.unfold]
+    rfl
+
+def diamond.induction (p: TProp α) (s: stream α) :
+  square (arrow p.next p) s → diamond p s → p s := by
+  intro h₁ h₂
+  induction h₂ with
+  | nil s h₂ =>
+    exact h₂
+  | cons s _ h₃ =>
+    rw [square.unfold, arrow, next, next] at h₁
+    apply h₁.left
+    apply h₃
+    apply h₁.right
+
+
+#print gfp.scott
+#check infᵢ_apply
+#check infᵢ_Prop_eq
+
+def square.induction (p: TProp α) (s: stream α) :
+  square (arrow p p.next) s → p s → square p s := by
+  intro h₁ h₂
+  rw [square, forallS.rewrite]
+  rw [square, forallS.rewrite] at h₁
+  intro n
+  induction n generalizing s with
+  | zero => trivial
+  | succ n h₃ =>
+    constructor
+    . apply h₂
+    . rw [tail_duplicate]
+      apply h₃
+      . intro n
+        specialize h₁ (n+1)
+        exact h₁.right
+      . specialize h₁ 1
+        simp only [forallS.approx, next, arrow, head_duplicate, and_true] at h₁
+        apply h₁
+        apply h₂
+
+def not.self_dual (p: TProp α) : p.not.next = p.next.not := by
+  rfl
+
+def not.distributivity_arrow (p q: TProp α) : (arrow p q).next = arrow p.next q.next := by
+  rfl
+
+def not.distributivity_until (p q: TProp α) : (Until p q).next = Until p.next q.next := by
+  funext s
+  apply propext
+  constructor <;> intro h₁
+  . rw [next] at h₁
+    generalize h₂: tail s = s' at *
+    induction h₁ generalizing s with
+    | nil s'' h₁ =>
+      induction h₂
+      apply Until.nil
+      exact h₁
+    | cons s'' h₁ h₃ h₄ =>
+      induction h₂
+      specialize h₄ (tail s) (Eq.refl _)
+      apply Until.cons
+      . apply h₁
+      . apply h₄
+  . induction h₁ with
+    | nil s' h₁ =>
+      apply Until.nil
+      apply h₁
+    | cons s' h₁ h₂ h₃ =>
+      rw [next]
+      apply Until.cons
+      . apply h₁
+      . apply h₃
+
+theorem Until.unfold (p q: TProp α) (s: stream α) :
+  Until p q s = (q s ∨ (p s ∧ next (Until p q) s)) := by
+  apply propext
+  constructor
+  <;> intro h₁
+  <;> cases h₁
+  case a.mp.cons h₁ h₂ =>
+    exact Or.inr (And.intro h₁ h₂)
+  case a.mp.nil h₁ =>
+    exact Or.inl h₁
+  case a.mpr.inl h₁ =>
+    exact Until.nil s h₁
+  case a.mpr.inr h₁ =>
+    exact Until.cons s h₁.left h₁.right
+
+def bot : TProp α := λ _ => False
+def top : TProp α := λ _ => True
+
+@[simp] theorem Until.false (p: TProp α) : Until p bot = bot := by
+  funext s
+  apply propext
+  constructor
+  . intro h
+    induction h with
+    | nil _ h => exact h
+    | cons _ _ _ h =>
+      apply h
+  . intro h
+    apply False.elim
+    apply h
+
+theorem diamond.from_until (p: TProp α)  : diamond p = Until top p := by
+  funext s
+  apply propext
+  constructor <;> intro h₁
+  . induction h₁ with
+    | nil s h₁ =>
+      apply Until.nil _ h₁
+    | cons s _ h₂ =>
+      apply Until.cons
+      . trivial
+      . apply h₂
+  . induction h₁ with
+    | nil s h₁ =>
+      apply diamond.nil _ h₁
+    | cons s _ _ h₃ =>
+      apply diamond.cons
+      apply h₃
+
+
+
+
+
+end TProp
+
+-- Rec I tenv α represent a definition of a stream that
+-- take set of streams of the form `∀ i: I, stream (tenv i)`
+-- and construct a new stream of type `stream α`
+inductive Rec (I: Type) (tenv: I → Type) : Type → Type 1 where
+| tup {α β: Type} : Rec I tenv α → Rec I tenv β → Rec I tenv (α × β)
+| fst {α β: Type} : Rec I tenv (α × β) → Rec I tenv α
+| snd {α β: Type} : Rec I tenv (α × β) → Rec I tenv β
+| map {α β: Type} : (α → β) → Rec I tenv α → Rec I tenv β
+| fby {α: Type} : α → Rec I tenv α → Rec I tenv α
+| ret {α: Type} : stream α → Rec I tenv α
+| arg : (i: I) → Rec I tenv (tenv i)
+
+
+
+
+
+
+instance Rec.instFunctor {I: Type} {tenv: I → Type} : Functor (stream.Rec I tenv) where
+  map := .map
+
+def Rec.ite {I α: Type} {tenv: I → Type}
+  (i: Rec I tenv Bool) (t: Rec I tenv α) (e: Rec I tenv α) : Rec I tenv α :=
+  (λ ⟨i, t, e⟩ => if i then t else e) <$> (.tup i (.tup t e))
+
+-- evaluate a recursive equation over streams
+def Rec.eval {I α: Type} {tenv: I → Type} (env: ∀ i: I, stream (tenv i)) : Rec I tenv α → stream α
+| .tup lhs rhs => mkPair (eval env lhs) (eval env rhs)
+| .fst pair => (eval env pair).fst
+| .snd pair => (eval env pair).snd
+| .fby x xs => cons x (eval env xs)
+| .map f xs => f <$> (eval env xs)
+| .arg i => env i
+| .ret val => val
+
+section Example
+namespace stream
+
+inductive I where
+| x | y | z | t
+
+abbrev tenv : I → Type
+| .x => Nat
+| .y => Bool
+| .z => Nat
+| .t => Prop
+
+abbrev node : (i: I) → Rec I tenv (tenv i)
+| .x => .fby 1 <| .ite (.arg I.y) (.arg I.z) ((· + 1) <$> .arg I.x)
+| .y => .fby true ((·=false) <$> .arg I.y)
+| .z => .ret (stream.cons 2 <| stream.const 1)
+| .t => .fby True <| .arg I.t
+
+abbrev property : (i: I) → tenv i → Prop
+| .x, x => 1 ≤ x
+| .y, _ => True
+| .z, z => 1 ≤ z
+| .t, t => t
+
+abbrev property.check (env: ∀ i, stream <| tenv i) (h₁: ∀ i, forallS (property i) (env i))
+  : (i: I) → forallS (property i) (Rec.eval env (node i))
+| .x => by
+  --rw [node, Rec.ite, Rec.instFunctor, Rec.eval]
+  --simp only [Rec.eval]
+  sorry
+| .y => by
+  specialize h₁ I.y
+  rw [forallS.unfold]
+  simp only [property, node, Rec.eval, true_and, tail_cons, Rec.instFunctor]
+  sorry
+
+
+| .z => by
+  sorry
+| .t => by
+  --rw [forallS.unfold, property]
+  --constructor
+  --. apply True.intro
+  --. specialize h₁ I.t
+  --  rw [node]
+  --  simp [Rec.eval]
+  --  apply h₁
+  sorry
+
+
+
+end stream
+end Example
+
+
+
+

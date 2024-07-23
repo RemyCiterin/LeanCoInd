@@ -238,58 +238,80 @@ A coinduction theorem is a theorem of the form
 
 open Lean Lean.Expr Lean.Meta Lean.Elab.Tactic
 open Qq
-section
 
-structure Result {α:Q(Type u)} (E: Q($α) → Type) (e: Q($α)) where
-  expr  : Q($α)
-  val   : E expr
-  proof : Q($e = $expr)
 
-def Result.Id {α:Q(Type u)} {E:Q($α) → Type} (e: Q($α)) (val: E e) : Result E e where
-  expr  := e
-  val   := val
-  proof := q(by rfl)
+namespace Tactic.pgfp₁
 
-def Result.map {α:Q(Type u)} {E:Q($α) → Type} {e: Q($α)}
-  (r:Result E e) (F:Q($α) → Type) (f: E r.expr → F r.expr) : Result F e where
-  expr  := r.expr
-  val   := f r.val
-  proof := r.proof
+open Lean Expr Elab Term Tactic Meta Qq
 
-def myApply (goal : MVarId) (e : Expr) : MetaM (List MVarId) := do
-  -- Check that the goal is not yet assigned.
-  goal.checkNotAssigned `myApply
-  -- Operate in the local context of the goal.
-  goal.withContext do
-    -- Get the goal's target type.
-    let target ← goal.getType
-    -- Get the type of the given expression.
-    let type ← inferType e
-    -- If `type` has the form `∀ (x₁ : T₁) ... (xₙ : Tₙ), U`, introduce new
-    -- metavariables for the `xᵢ` and obtain the conclusion `U`. (If `type` does
-    -- not have this form, `args` is empty and `conclusion = type`.)
-    let (args, _, conclusion) ← forallMetaTelescopeReducing type
-    -- If the conclusion unifies with the target:
-    if ← isDefEq target conclusion then
-      -- Assign the goal to `e x₁ ... xₙ`, where the `xᵢ` are the fresh
-      -- metavariables in `args`.
-      goal.assign (mkAppN e args)
-      -- `isDefEq` may have assigned some of the `args`. Report the rest as new
-      -- goals.
-      let newGoals ← args.filterMapM λ mvar => do
-        let mvarId := mvar.mvarId!
-        if ! (← mvarId.isAssigned) && ! (← mvarId.isDelayedAssigned) then
-          return some mvarId
-        else
-          return none
-      return newGoals.toList
-    -- If the conclusion does not unify with the target, throw an error.
-    else
-      throwTacticEx `myApply goal m!"{e} is not applicable to goal with target {target}"
+/-- tactic for proof by bisimulation on streams -/
+syntax "pgfp₁" (ppSpace colGt term) (" with" (ppSpace colGt binderIdent)+)? : tactic
 
-elab "coind" e:term : tactic => do
-  let e ← Elab.Term.elabTerm e none
-  Elab.Tactic.liftMetaTactic (myApply . e)
 
-end
+def matchPGFP? (e:Q(Prop)) : MetaM (Option (Expr × Expr)) :=
+  match e with
+  | .app _ x => do
+    let t ← inferType x
+    return .some (t, x)
+  | _ => return .none
+
+def matchPGFP2? (e:Q(Prop)) : MetaM (Option (Expr × Expr × Expr × Expr)) :=
+  match e with
+  | .app (.app _ x) y => do
+    let tx ← inferType x
+    let ty ← inferType y
+    return .some ⟨tx, x, ty, y⟩
+  | _ => return .none
+
+
+#check matchEq?
+
+elab_rules : tactic
+  | `(tactic| pgfp₁ $e $[ with $ids:binderIdent*]?) => do
+    let ids : TSyntaxArray `Lean.binderIdent := ids.getD #[]
+    let idsn (n : ℕ) : Name :=
+      match ids[n]? with
+      | some s =>
+        match s with
+        | `(binderIdent| $n:ident) => n.getId
+        | `(binderIdent| _) => `_
+        | _ => unreachable!
+      | none => `_
+    let idss (n : ℕ) : TacticM (TSyntax `rcasesPat) := do
+      match ids[n]? with
+      | some s =>
+        match s with
+        | `(binderIdent| $n:ident) => `(rcasesPat| $n)
+        | `(binderIdent| _%$b) => `(rcasesPat| _%$b)
+        | _ => unreachable!
+      | none => `(rcasesPat| _)
+    withMainContext do
+      let e ← Tactic.elabTerm e none
+      let f ← liftMetaTacticAux fun g => do
+        let (#[fv], g) ← g.generalize #[{ expr := e }] | unreachable!
+        return (mkFVar fv, [g])
+      withMainContext do
+        let some (t, l) ← matchPGFP? (←getMainTarget) | throwError "goal is not an application"
+        let ex ←
+          withLocalDecl (idsn 1) .default t fun v₀ => do
+            let x₀ ← mkEq v₀ l
+            let ex₁ ← mkLambdaFVars #[f] x₀
+            let ex₂ ← mkAppM ``Exists #[ex₁]
+            mkLambdaFVars #[v₀] ex₂
+        let R ← liftMetaTacticAux fun g => do
+          let g₁ ← g.define (idsn 0) (← mkArrow t (mkSort .zero)) ex
+          let (Rv, g₂) ← g₁.intro1P
+          return (mkFVar Rv, [g₂])
+        withMainContext do
+          ids[0]?.forM fun s => addLocalVarInfoForBinderIdent R s
+          let sR ← exprToSyntax R
+          evalTactic <| ← `(tactic|
+            refine pgfp.theorem _ $sR ?_ _ ⟨_, rfl⟩;
+            rintro $(← idss 1) $(← idss 2))
+          liftMetaTactic fun g => return [← g.clear f.fvarId!]
+    for n in [6 : ids.size] do
+      let name := ids[n]!
+      logWarningAt name m!"unused name: {name}"
+
+end Tactic.pgfp₁
 
