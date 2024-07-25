@@ -5,62 +5,53 @@ import CoInd.Eqns
 
 namespace Container
 
+
 variable {C:Container.{u₁}}
-def M.construct.automaton : C.Obj (M C) → C.Obj (C.Obj <| M C) := Map destruct
+def M.construct (x : C.Obj C.M) : C.M where
+  approx
+  | 0 => Approx.MStop
+  | n+1 => Approx.MStep x.fst (λ k => (x.snd k).approx n)
 
-def M.construct (x₀: C.Obj (M C)) : M C :=
-  M.corec M.construct.automaton x₀
+  agrees := by
+    intro n
+    cases n with
+    | zero => apply Agree.AgreeStop
+    | succ n =>
+      apply Agree.AgreeStep
+      intro k
+      apply (x.snd k).agrees
 
-def M.construct_def : construct = corec (@construct.automaton C) := by rfl
+@[simp] theorem M.destruct_construct (x: C.Obj C.M) : (construct x).destruct = x := by rfl
 
-theorem M.construct_destruct (x:M C) : construct (destruct x) = x :=
-by
-  let R (x y: M C) := x = construct (destruct y)
-  apply bisim R
-  . intro x y h₀
-    have h₀ := congrArg destruct h₀
-    cases h₁:destruct y
-    case mk node k₂ =>
-      rw [h₁] at h₀
-      simp only [construct, destruct_corec, Map] at h₀
-      simp only [construct.automaton, Map] at h₀
-      exists node
-      exists construct ∘ destruct ∘ k₂
-      exists k₂
-      constructor
-      . exact h₀
-      . constructor
-        . rfl
-        . intro i
-          rfl
-  . rfl
+theorem M.destruct.uniq (x y: C.M) : x.destruct = y.destruct → x = y := by
+  intro h
+  apply M.bisim (λ x y => x.destruct = y.destruct)
+  intro x y h
+  rw [←h]
+  exists (destruct x).fst
+  exists (destruct x).snd
+  exists (destruct x).snd
+  simp only [implies_true, and_self]
+  assumption
 
-def M.destruct_construct : ∀ x: C.Obj (M C), destruct (construct x) = x :=
-by
-  intro ⟨n, k⟩
-  --simp only [construct, construct.automaton]
-  have : (destruct (construct ⟨n, k⟩)).fst = n := by
-    rfl
+@[simp] theorem M.construct_destruct (x: C.M) : construct (destruct x) = x := by
+  apply M.destruct.uniq
+  rfl
 
-  simp only [construct]
-  rw [destruct_corec construct.automaton ⟨n, k⟩]
-  simp only [←construct_def]
-  simp only [construct.automaton, Map]
 
-  have : construct ∘ destruct ∘ k = k := by
-    funext x
-    simp only [Function.comp]
-    rw [M.construct_destruct]
+def M.construct_inj {x y: C.Obj C.M} (h: construct x = construct y) : x = y := by
+  rw [← destruct_construct x, h]
+  rfl
 
-  rw [this]
 
-attribute [eqns QPF.M.construct_destruct] M.construct
-attribute [eqns QPF.M.destruct_construct QPF.M.destruct_corec] M.destruct
+protected def M.cases {r: C.M → Sort w} (f: ∀ x: C.Obj C.M, r (M.construct x)) (x: C.M) : r x :=
+  cast (by rw [M.construct_destruct]) <| f x.destruct
 
-#check M.construct
-#check M.construct_destruct
-#check M.destruct_construct
+protected def M.casesOn' {r: C.M → Sort w} (x: C.M) (f: ∀ x: C.Obj C.M, r (M.construct x)) : r x :=
+  M.cases f x
 
+@[simp] theorem M.cases_construct {r: C.M → Sort w} (f: ∀ x:C.Obj C.M, r (M.construct x)) (x: C.Obj C.M) :
+  M.cases f (construct x) = f x := by rfl
 
 end Container
 

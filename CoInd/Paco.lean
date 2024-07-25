@@ -80,14 +80,15 @@ def gfp.scott.gfp_leq_scott [inst: ScottContinuousNat f] :
   apply scott.tarski
   simp only [OrderHom.map_gfp, le_refl]
 
-def gfp.scott.gfp_eq_scott [inst: ScottContinuousNat f] :
+-- the `rewriting theorem` allow to apply coinduction by induction over the depth of the coinductive prediacte
+def gfp.scott.rewrite [inst: ScottContinuousNat f] :
   OrderHom.gfp f = scott f := by
   apply (gfp_leq_scott f).antisymm
   exact scott_leq_gfp f
 
 @[simp] def gfp.scott.unfold [inst: ScottContinuousNat f] :
   f (scott f) = scott f := by
-  rw [←gfp_eq_scott f]
+  rw [←scott.rewrite f]
   simp [OrderHom.map_gfp]
 
 
@@ -103,7 +104,8 @@ def pgfp.union  (p: L) : L →o L where
         assumption
 
 -- if L is a `CompleteDistribLattice`, then `pgfp.union f p` is Scott continuous if `f` is Scott continuous
-instance {L:Type u} [CompleteDistribLattice L] {f: L →o L} {p: L} [inst: ScottContinuousNat f] : ScottContinuousNat (pgfp.union f p) where
+instance {L:Type u} [CompleteDistribLattice L] {f: L →o L} {p: L} [inst: ScottContinuousNat f] :
+  ScottContinuousNat (pgfp.union f p) where
   scottContinuousNat := by
     intro S
 
@@ -142,10 +144,6 @@ def pgfp : L →o L where
 def pgfp.approx (p: L) (n: Nat) : L →o L := gfp.approx (pgfp.union f p) n
 
 def pgfp.scott (p: L) : L := gfp.scott (pgfp.union f p)
-
--- def pgfp.scott.thm (p: L) [ScottContinuousNat f] : pgfp f = pgfp.scott f := by
---   simp [gfp.scott.gfp_eq_scott (pgfp.union f p)]
---   sorry
 
 def pgfp.unfold (p:L) :
   f (p ⊔ pgfp f p) = pgfp f p :=
@@ -210,6 +208,16 @@ by
 def pgfp.monotone (p q:L) :
   p ≤ q → pgfp f p ≤ pgfp f q := by
   apply (pgfp f).2
+
+
+def pgfp.scott.rewrite {L: Type u} [CompleteDistribLattice L] (f: L →o L) [ScottContinuousNat f]
+  : pgfp f = pgfp.scott f := by
+  conv =>
+    rhs
+    simp [scott]
+    intro p
+    simp only [←gfp.scott.rewrite (pgfp.union f p)]
+    rfl
 
 end
 

@@ -107,10 +107,7 @@ def M.corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) : M C where
 #check Container
 
 theorem M.destruct_corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) :
-  (M.corec f x₀).destruct = C.Map (M.corec f) (f x₀) :=
-by
-  simp only [corec, destruct]
-  rfl
+  (M.corec f x₀).destruct = C.Map (M.corec f) (f x₀) := Eq.refl _
 
 #check cast_heq
 
@@ -289,12 +286,13 @@ elab_rules : tactic
           let sR ← exprToSyntax R
           evalTactic <| ← `(tactic|
             --refine MvQPF.Cofix.bisim₂ $sR ?_ _ _ ⟨_, rfl, rfl⟩;
+            --refine Container.M.bisim $sR ?_ _ _ ⟨_, rfl, rfl⟩;
             refine Container.M.bisim $sR ?_ _ _ ⟨_, rfl, rfl⟩;
             rintro $(← idss 1) $(← idss 2) ⟨$(← idss 3), $(← idss 4), $(← idss 5)⟩)
           liftMetaTactic fun g => return [← g.clear f.fvarId!]
     for n in [6 : ids.size] do
       let name := ids[n]!
       logWarningAt name m!"unused name: {name}"
-
+#check Container.M.bisim
 
 end Container
