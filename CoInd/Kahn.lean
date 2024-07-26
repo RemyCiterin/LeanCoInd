@@ -5,6 +5,7 @@ import CoInd.Paco
 import CoInd.Container
 import CoInd.Utils
 import CoInd.Eqns
+import CoInd.Std.DelabRule
 
 import Mathlib.Tactic.Linarith
 
@@ -69,7 +70,18 @@ def Kahn.F.mk (k: F α (Kahn α)) : Kahn α :=
   | .cons _ xs =>
     rfl
 
+macro "eps(" t:term ")" : term => `(Kahn.F.mk (Kahn.F.eps $t))
+macro "cons(" a:term "," t:term ")" : term => `(Kahn.F.mk (Kahn.F.cons $a $t))
 
+
+delab_rule Kahn.F.mk
+| `($_ (Kahn.F.cons $a $t)) => `(cons($a, $t))
+| `($_ (Kahn.F.eps $t)) => `(eps($t))
+| `($_ ($t)) => `(eps($t))
+
+example (x: Kahn Nat) (y: Kahn.F Nat <| Kahn Nat) : y.mk ≠ (Kahn.F.eps x).mk := by
+  intro h
+  sorry
 
 def Kahn.bot : Kahn α :=
   corec (λ _ => .eps .unit) Unit.unit
@@ -140,8 +152,8 @@ theorem Kahn.bisim (r: Kahn α → Kahn α → Prop)
 
 @[elab_as_elim, eliminator]
 protected def Kahn.cases {motive: Kahn α → Sort w} (x: Kahn α)
-  (cons: ∀ a x, motive (F.cons a x).mk)
-  (eps: ∀ x: Kahn α, motive (F.eps x).mk)
+  (cons: ∀ a (y: Kahn α), motive cons(a, y))
+  (eps: ∀ y: Kahn α, motive eps(y))
   : motive x :=
   Container.M.cases (λ ⟨node, children⟩ =>
     match node with
@@ -151,17 +163,17 @@ protected def Kahn.cases {motive: Kahn α → Sort w} (x: Kahn α)
 
 @[simp]
 protected def Kahn.cases_eps {motive: Kahn α → Sort w} (x: Kahn α)
-  (cons: ∀ a x, motive (F.cons a x).mk)
-  (eps: ∀ x: Kahn α, motive (F.eps x).mk) :
-  Kahn.cases (F.eps x).mk cons eps = eps x := by
+  (cons: ∀ a (x: Kahn α), motive cons(a, x))
+  (eps: ∀ x: Kahn α, motive eps(x)) :
+  Kahn.cases eps(x) cons eps = eps x := by
   rw [Kahn.cases]
   simp [F.mk]
 
 @[simp]
 protected def Kahn.cases_cons {motive: Kahn α → Sort w} (a: α) (x: Kahn α)
-  (cons: ∀ a x, motive (F.cons a x).mk)
-  (eps: ∀ x: Kahn α, motive (F.eps x).mk) :
-  Kahn.cases (F.cons a x).mk cons eps = cons a x := by
+  (cons: ∀ a x, motive cons(a, x))
+  (eps: ∀ x: Kahn α, motive eps(x)) :
+  Kahn.cases cons(a, x) cons eps = cons a x := by
   rw [Kahn.cases]
   simp [F.mk]
 
@@ -255,15 +267,15 @@ def Kahn.dest.uniq (k k': Kahn α) :
 
 
 -- remove the first `n` ε of a stream `k`
-def Kahn.burn (k: Kahn α) : Nat → F α (Kahn α)
+def Kahn.burn (k: Kahn α) : Nat → Kahn α
 | n+1 =>
   match k.dest with
   | .eps k => burn k n
-  | d => d
-| _ => k.dest
+  | _ => k
+| _ => k
 
 @[simp] def Kahn.burn_cons (a: α) (k: Kahn α) (n: Nat) :
-  burn (F.cons a k).mk n = F.cons a k := by
+  burn (F.cons a k).mk n = (F.cons a k).mk := by
   cases n with
   | zero => simp [burn]
   | succ _ => simp [burn]
@@ -272,9 +284,12 @@ def Kahn.burn (k: Kahn α) : Nat → F α (Kahn α)
   burn (F.eps k).mk (n+1) = burn k n := by
   rfl
 
+@[simp] def Kahn.burn_zero (k: Kahn α) :
+  burn k 0 = k := by rfl
 
-def Kahn.burn_burn1 (k: Kahn α) (n: Nat) :
-  (k.burn n).mk.burn 1 = k.burn (n+1) := by
+
+def Kahn.burn1_burn (k: Kahn α) (n: Nat) :
+  burn (k.burn n) 1 = k.burn (n+1) := by
   induction n generalizing k with
   | zero =>
     simp only [burn, mk_dest, Nat.succ.injEq]
@@ -283,30 +298,64 @@ def Kahn.burn_burn1 (k: Kahn α) (n: Nat) :
     | cons x xs =>
       simp only [burn_cons]
     | eps xs =>
-      simp
+      rw [burn_eps, burn_eps]
+      apply h
+
+def Kahn.burn_burn1 (k: Kahn α) (n: Nat) :
+  burn (k.burn 1) n = k.burn (n+1) := by
+  cases n with
+  | zero =>
+    simp only [burn, mk_dest, Nat.succ.injEq]
+  | succ n =>
+    cases k using Kahn.cases with
+    | cons x xs =>
+      simp only [burn_cons]
+    | eps xs =>
+      rw [burn_eps, burn_eps, burn_zero]
 
 
+-- rewrite a composition of burn at the burn of the sum of the fuels
+theorem Kahn.burn_burn (k: Kahn α) (n m: Nat) :
+  (k.burn n).burn m = k.burn (n+m) := by
+  induction m generalizing n with
+  | zero =>
+    simp [burn]
+  | succ m h =>
+    specialize h (n+1)
+    cases k using Kahn.cases with
+    | cons a k =>
+      rw [burn_cons, burn_cons, burn_cons]
+    | eps k =>
+      have h₁ : n + 1 + m = (n + m) + 1 := by simp_arith
+      have h₂ : n + Nat.succ m = (n + m) + 1 := by simp_arith
+      have h₃ : Nat.succ m = m + 1 := by simp_arith
+      rw [h₁, burn_eps, burn_eps] at h
+      rw [h₂, burn_eps, ←h, h₃, ←burn_burn1, burn1_burn, ←burn_burn1]
+      rfl
 
---theorem Kahn.burn_burn (k: Kahn α) (n m: Nat) :
---  k.burn (n+m) = (k.burn n).mk.burn m := by
---  induction m generalizing n with
---  | zero =>
---    simp [burn]
---  | succ m h =>
---    specialize h (n+1)
---    cases k using Kahn.cases with
---    | eps k =>
---      have h₁ : n + 1 + m = Nat.succ (n + m) := by simp_arith
---      have h₂ : n + Nat.succ m = Nat.succ (n + m) := by simp_arith
---      rw [h₁] at h
---      rw [h₂, h]
 
+def Kahn.ε (k: Kahn α) (n:Nat) : Kahn α :=
+  match n with
+  | n+1 => F.mk (.eps (k.ε n))
+  | 0 => k
 
+def Kahn.burn_ε (k: Kahn α) (n: Nat) :
+  (k.ε n).burn n = k := by
+  induction n with
+  | zero => rfl
+  | succ n h =>
+    rw [ε, burn_eps]
+    assumption
 
+def Kahn.ε_ε (k: Kahn α) (n m: Nat) :
+  (k.ε n).ε m = k.ε (n + m) := by
+  induction m with
+  | zero =>
+    rfl
+  | succ m h =>
+    simp only [ε, ε, Nat.add_eq, h]
 
-
-
---theorem Kahn.burn.double_coons (a₁ a₂: α) (k k₁ k₂: Kahn α) (n m: Nat) :
+--theorem Kahn.burn.double_cons (a₁ a₂: α) (k k₁ k₂: Kahn α) (n m: Nat) :
 --  k.burn n = F.cons a₁ k₁ → k.burn m = F.cons a₂ k₂ → k.burn n = k.burn m := by
 --  intro h₁ h₂
 --  induction n generalizing m k
@@ -327,13 +376,13 @@ def Kahn.burn_burn1 (k: Kahn α) (n: Nat) :
 
 
 
-def Kahn.burn.depth_prop (k: Kahn α) (n: Nat) : Prop := cons? (k.burn n)
+def Kahn.burn.depth_prop (k: Kahn α) (n: Nat) : Prop := cons? (k.burn n).dest
 
 noncomputable def Kahn.burn_depth (k: Kahn α) : Nat :=
   Classical.epsilon (burn.depth_prop k)
 
 -- like burn but we don't look at the depth of the search
-partial def Kahn.burnAllImpl (k: Kahn α) (h₁: ¬k.bot?) : F α <| Kahn α :=
+partial def Kahn.burnAllImpl (k: Kahn α) (h₁: ¬k.bot?) : Kahn α :=
   match h₂: k.dest with
   | .eps k' =>
     k'.burnAllImpl (by
@@ -346,16 +395,16 @@ partial def Kahn.burnAllImpl (k: Kahn α) (h₁: ¬k.bot?) : F α <| Kahn α :=
         rw [h₂]
         rfl
       )
-  | _ => k.dest
+  | _ => k
 
 -- AXIOM: `burnAllImpl k` terminate and return `k.burn k.burn_depth`
-@[implemented_by Kahn.burnAllImpl] def Kahn.burnAll (k: Kahn α) (h₁: ¬ k.bot?) : F α (Kahn α) :=
+@[implemented_by Kahn.burnAllImpl] def Kahn.burnAll (k: Kahn α) (h₁: ¬ k.bot?) : Kahn α :=
   k.burn k.burn_depth
 
 #check Classical.epsilon_spec
 
-theorem Kahn.bot_from_burn (k: Kahn α) (h: ¬ (∃ n, cons? (k.burn n))) : k = bot := by
-  apply bisim (λ x y => ¬(∃ n, cons? (x.burn n)) ∧ y = bot) _ _ _ ⟨h, Eq.refl _⟩
+theorem Kahn.bot_from_burn (k: Kahn α) (h: ¬ (∃ n, cons? (k.burn n).dest)) : k = bot := by
+  apply bisim (λ x y => ¬(∃ n, cons? (x.burn n).dest) ∧ y = bot) _ _ _ ⟨h, Eq.refl _⟩
   intro s₁ s₂ ⟨h₁, h₂⟩
   rw [bisimF]
   match h:s₁.dest, h':s₂.dest with
@@ -366,8 +415,7 @@ theorem Kahn.bot_from_burn (k: Kahn α) (h: ¬ (∃ n, cons? (k.burn n))) : k = 
       apply h₁
       exists (.succ n)
       have : burn s₁ (.succ n) = burn s₁' n := by
-        rw [burn]
-        assumption
+        rw [burn, h]
       rw [this]
       assumption
     . have h₂ := congrArg dest h₂
@@ -383,17 +431,16 @@ theorem Kahn.bot_from_burn (k: Kahn α) (h: ¬ (∃ n, cons? (k.burn n))) : k = 
     simp [cons?, burn, h] at h₁
 
 -- prove that if `k` is not `⊥ ` then `k.burnAll` really burn all the epsilons
-@[simp] theorem Kahn.burnAll_cons? (k: Kahn α) (h₁: ¬k.bot?) : cons? (k.burnAll h₁) := by
+@[simp] theorem Kahn.burnAll_cons? (k: Kahn α) (h₁: ¬k.bot?) : cons? (k.burnAll h₁).dest := by
   have := @Classical.epsilon_spec _ (burn.depth_prop k)
   apply this
   have := h₁.comp (bot_from_burn k)
   have := Classical.not_not.1 this
   exact this
 
-
 inductive Kahn.leF (r: Kahn α → Kahn α → Prop) : Kahn α → Kahn α → Prop where
-| cons {x y: Kahn α} (a: α) (x' y': Kahn α) (n: Nat) :
-  x.dest = F.cons a x' → y.burn n = F.cons a y' → r x' y' → leF r x y
+| cons (a: α) (x y: Kahn α) (n: Nat) :
+  r x y → leF r (F.cons a x).mk ((F.cons a y).mk.ε n)
 | eps {x y: Kahn α} (x': Kahn α) :
   x.dest = .eps x' → r x' y → leF r x y
 

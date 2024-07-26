@@ -178,7 +178,7 @@ def And.right {H: PROP} (P Q: PROP) : H ⊢ P ∧ Q → Q :=
 def And.mk {H: PROP} {P Q: PROP} : H ⊢ P → Q → P ∧ Q :=
   imp_intro <| imp_intro <| and_intro (and_elim_l.trans and_elim_r) and_elim_r
 
-def and_top {P: PROP} : tprop(P ∧ ⊤) = P := by
+def and_top {P: PROP} : tprop(P ∧ ⊤) = P := by`
   apply (bientails_iff_eq _ _).1
   constructor
   . exact and_elim_l
