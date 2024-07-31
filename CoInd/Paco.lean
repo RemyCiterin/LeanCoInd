@@ -222,10 +222,14 @@ def pgfp.scott.rewrite {L: Type u} [CompleteDistribLattice L] (f: L →o L) [Sco
 end
 
 section
-variable {α: Type u}
+variable {α β: Type u}
 
 theorem pgfp.theorem (f: (α → Prop) →o (α → Prop)) (p: α → Prop) :
   (∀ x, p x → f (p ⊔ pgfp f p) x) → ∀ x, p x → pgfp f ⊥ x :=
+  λ h₁ x h₂ => (coinduction f p).2 h₁ x h₂
+
+theorem pgfp.theorem₂ (f: (α → β → Prop) →o (α → β → Prop)) (p: α → β → Prop) :
+  (∀ x y, p x y → f (p ⊔ pgfp f p) x y) → ∀ x y, p x y → pgfp f ⊥ x y :=
   λ h₁ x h₂ => (coinduction f p).2 h₁ x h₂
 end
 
@@ -254,6 +258,7 @@ open Lean Expr Elab Term Tactic Meta Qq
 
 /-- tactic for proof by bisimulation on streams -/
 syntax "pgfp₁" (ppSpace colGt term) (" with" (ppSpace colGt binderIdent)+)? : tactic
+syntax "pgfp₂" (ppSpace colGt term) (" with" (ppSpace colGt binderIdent)+)? : tactic
 
 
 def matchPGFP? (e:Q(Prop)) : MetaM (Option (Expr × Expr)) :=
@@ -321,5 +326,61 @@ elab_rules : tactic
       let name := ids[n]!
       logWarningAt name m!"unused name: {name}"
 
+#check MVarId.generalize
+
+elab_rules : tactic
+  | `(tactic| pgfp₂ $e $[ with $ids:binderIdent*]?) => do
+    let ids : TSyntaxArray `Lean.binderIdent := ids.getD #[]
+    let idsn (n : ℕ) : Name :=
+      match ids[n]? with
+      | some s =>
+        match s with
+        | `(binderIdent| $n:ident) => n.getId
+        | `(binderIdent| _) => `_
+        | _ => unreachable!
+      | none => `_
+    let idss (n : ℕ) : TacticM (TSyntax `rcasesPat) := do
+      match ids[n]? with
+      | some s =>
+        match s with
+        | `(binderIdent| $n:ident) => `(rcasesPat| $n)
+        | `(binderIdent| _%$b) => `(rcasesPat| _%$b)
+        | _ => unreachable!
+      | none => `(rcasesPat| _)
+    withMainContext do
+      let e ← Tactic.elabTerm e none
+      let f ← liftMetaTacticAux fun g => do
+        let (#[fv], g) ← g.generalize #[{ expr := e }] | unreachable!
+        return (mkFVar fv, [g])
+      withMainContext do
+        let some ⟨t₀, l₀, t₁, l₁⟩ ← matchPGFP2? (←getMainTarget) | throwError "goal is not an application"
+        let ex ←
+          withLocalDecl (idsn 1) .default t₀ fun v₀ => do
+            withLocalDecl (idsn 2) .default t₁ fun v₁ => do
+              let x₀ ← mkEq v₀ l₀
+              let x₁ ← mkEq v₁ l₁
+              let xx ← mkAppM ``And #[x₀, x₁]
+              let ex₁ ← mkLambdaFVars #[f] xx
+              let ex₂ ← mkAppM ``Exists #[ex₁]
+              mkLambdaFVars #[v₀, v₁] ex₂
+        let R ← liftMetaTacticAux fun g => do
+          let g₁ ← g.define (idsn 0) (← mkArrow t₀ (← mkArrow t₁ (mkSort .zero))) ex
+          let (Rv, g₂) ← g₁.intro1P
+          return (mkFVar Rv, [g₂])
+        withMainContext do
+          ids[0]?.forM fun s => addLocalVarInfoForBinderIdent R s
+          let sR ← exprToSyntax R
+          evalTactic <| ← `(tactic|
+            refine pgfp.theorem₂ _ $sR ?_ _ _ ⟨_, rfl, rfl⟩;
+            rintro $(← idss 1) $(← idss 2) $(← idss 3))
+          liftMetaTactic fun g => return [← g.clear f.fvarId!]
+    for n in [6 : ids.size] do
+      let name := ids[n]!
+      logWarningAt name m!"unused name: {name}"
+
+
+#check 42
 end Tactic.pgfp₁
+
+
 

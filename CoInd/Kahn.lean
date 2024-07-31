@@ -70,18 +70,54 @@ def Kahn.F.mk (k: F α (Kahn α)) : Kahn α :=
   | .cons _ xs =>
     rfl
 
+def Kahn.F.mk.inj (k k': F α (Kahn α)) :
+  k.mk = k'.mk → k = k' := by
+  intro h
+  have h := congrArg dest h
+  rw [dest_mk, dest_mk] at h
+  assumption
+
+@[simp] def Kahn.F.mk.injEq (k k': F α (Kahn α)) :
+  (k.mk = k'.mk) = (k = k') := by
+  apply propext
+  constructor
+  . apply inj
+  . apply congrArg
+
+
 macro "eps(" t:term ")" : term => `(Kahn.F.mk (Kahn.F.eps $t))
 macro "cons(" a:term "," t:term ")" : term => `(Kahn.F.mk (Kahn.F.cons $a $t))
 
 
-delab_rule Kahn.F.mk
-| `($_ (Kahn.F.cons $a $t)) => `(cons($a, $t))
-| `($_ (Kahn.F.eps $t)) => `(eps($t))
-| `($_ ($t)) => `(eps($t))
+open Lean PrettyPrinter Delaborator Meta Expr SubExpr Qq in
+@[delab app.Kahn.F.mk]
+def Kahn.F.mk.delab : Delab := do
+  let e ← instantiateMVars <| ← getExpr
+  let t ← whnf (← inferType e)
+  let .sort (.succ u) ← whnf (← inferType t) | failure
+  have t : Q(Type u) := t
+  have e : Q($t) := e
+  go u t e
+where
+  fallBack : DelabM Term := do
+    guard False
+    failure
 
-example (x: Kahn Nat) (y: Kahn.F Nat <| Kahn Nat) : y.mk ≠ (Kahn.F.eps x).mk := by
-  intro h
-  sorry
+  go (u: Level) (t: Q(Type u)) (expr: Q($t)) : DelabM Term :=
+    match t with
+    | ~q(Container.M (Kahn.C $typ)) =>
+      match expr with
+      | ~q(Kahn.F.mk (Kahn.F.eps $e)) => do
+        let e := (← delabCore e default Delaborator.delab).fst
+        `(eps($e))
+      | ~q(Kahn.F.mk (Kahn.F.cons $a $e)) => do
+        let a := (← delabCore a default Delaborator.delab).fst
+        let e := (← delabCore e default Delaborator.delab).fst
+        `(cons($a, $e))
+      | _ =>
+        fallBack
+    | _ =>
+      fallBack
 
 def Kahn.bot : Kahn α :=
   corec (λ _ => .eps .unit) Unit.unit
@@ -238,7 +274,7 @@ elab_rules : tactic
 
 #print Expr
 
-def Kahn.dest.uniq (k k': Kahn α) :
+def Kahn.dest.inj (k k': Kahn α) :
   k.dest = k'.dest → k = k' := by
   intro h
   apply bisim (λ k k' => k.dest = k'.dest) _ _ _ h
@@ -260,10 +296,18 @@ def Kahn.dest.uniq (k k': Kahn α) :
     rw [h₂, h₃] at h₁
     simp only at h₁
 
+@[simp] def Kahn.dest.injEq (k k': Kahn α) :
+  (k.dest = k'.dest) = (k = k') := by
+  apply propext
+  constructor
+  . apply inj
+  . apply congrArg
+
 
 @[simp] def Kahn.mk_dest (k:Kahn α) : k.dest.mk = k := by
-  apply dest.uniq
+  apply dest.inj
   simp only [dest_mk]
+
 
 
 -- remove the first `n` ε of a stream `k`
@@ -288,51 +332,29 @@ def Kahn.burn (k: Kahn α) : Nat → Kahn α
   burn k 0 = k := by rfl
 
 
-def Kahn.burn1_burn (k: Kahn α) (n: Nat) :
-  burn (k.burn n) 1 = k.burn (n+1) := by
-  induction n generalizing k with
-  | zero =>
-    simp only [burn, mk_dest, Nat.succ.injEq]
-  | succ n h =>
-    cases k using Kahn.cases with
-    | cons x xs =>
-      simp only [burn_cons]
-    | eps xs =>
-      rw [burn_eps, burn_eps]
-      apply h
-
-def Kahn.burn_burn1 (k: Kahn α) (n: Nat) :
-  burn (k.burn 1) n = k.burn (n+1) := by
-  cases n with
-  | zero =>
-    simp only [burn, mk_dest, Nat.succ.injEq]
-  | succ n =>
-    cases k using Kahn.cases with
-    | cons x xs =>
-      simp only [burn_cons]
-    | eps xs =>
-      rw [burn_eps, burn_eps, burn_zero]
-
-
 -- rewrite a composition of burn at the burn of the sum of the fuels
-theorem Kahn.burn_burn (k: Kahn α) (n m: Nat) :
+theorem Kahn.burn_compose (k: Kahn α) (n m: Nat) :
   (k.burn n).burn m = k.burn (n+m) := by
-  induction m generalizing n with
+  induction n generalizing m k with
   | zero =>
     simp [burn]
-  | succ m h =>
-    specialize h (n+1)
+  | succ n h =>
     cases k using Kahn.cases with
-    | cons a k =>
-      rw [burn_cons, burn_cons, burn_cons]
-    | eps k =>
-      have h₁ : n + 1 + m = (n + m) + 1 := by simp_arith
-      have h₂ : n + Nat.succ m = (n + m) + 1 := by simp_arith
-      have h₃ : Nat.succ m = m + 1 := by simp_arith
-      rw [h₁, burn_eps, burn_eps] at h
-      rw [h₂, burn_eps, ←h, h₃, ←burn_burn1, burn1_burn, ←burn_burn1]
-      rfl
+    | eps xs =>
+      have h' : Nat.succ n + m = Nat.succ (n+m) := by simp_arith
+      simp only [h', burn]
+      apply h
+    | cons x xs =>
+      simp only [burn, dest_mk, burn_cons]
 
+theorem Kahn.burn_cons_inj (x y: α) (xs ys k: Kahn α) (n m: Nat) :
+  k.burn n = cons(x, xs) → k.burn m = cons(y, ys) → x = y ∧ xs = ys := by
+  intro h₁ h₂
+  have h₃ := congrArg (λ k => burn k m) h₁
+  have h₄ := congrArg (λ k => burn k n) h₂
+  simp only [burn_compose, burn_cons] at h₃ h₄
+  rw [Nat.add_comm, h₃, Kahn.F.mk.injEq, F.cons.injEq] at h₄
+  assumption
 
 def Kahn.ε (k: Kahn α) (n:Nat) : Kahn α :=
   match n with
@@ -355,25 +377,6 @@ def Kahn.ε_ε (k: Kahn α) (n m: Nat) :
   | succ m h =>
     simp only [ε, ε, Nat.add_eq, h]
 
---theorem Kahn.burn.double_cons (a₁ a₂: α) (k k₁ k₂: Kahn α) (n m: Nat) :
---  k.burn n = F.cons a₁ k₁ → k.burn m = F.cons a₂ k₂ → k.burn n = k.burn m := by
---  intro h₁ h₂
---  induction n generalizing m k
---  case zero =>
---    simp [burn] at h₁
---    cases m with
---    | zero =>
---      rfl
---    | succ m =>
---      unfold burn
---      rw [h₁]
---  case succ n h₃ =>
---    cases h₄:k.dest with
---    | eps k' =>
---      unfold burn at h₁
---      rw [h₄] at h₁
---      simp at h₁
-
 
 
 def Kahn.burn.depth_prop (k: Kahn α) (n: Nat) : Prop := cons? (k.burn n).dest
@@ -391,7 +394,7 @@ partial def Kahn.burnAllImpl (k: Kahn α) (h₁: ¬k.bot?) : Kahn α :=
         apply h₁
         rw [h₃] at h₂;
         rw [←dest_bot] at h₂
-        have h₂ := dest.uniq _ _ h₂
+        have h₂ := dest.inj _ _ h₂
         rw [h₂]
         rfl
       )
@@ -439,54 +442,53 @@ theorem Kahn.bot_from_burn (k: Kahn α) (h: ¬ (∃ n, cons? (k.burn n).dest)) :
   exact this
 
 inductive Kahn.leF (r: Kahn α → Kahn α → Prop) : Kahn α → Kahn α → Prop where
-| cons (a: α) (x y: Kahn α) (n: Nat) :
-  r x y → leF r (F.cons a x).mk ((F.cons a y).mk.ε n)
-| eps {x y: Kahn α} (x': Kahn α) :
-  x.dest = .eps x' → r x' y → leF r x y
+| cons {x y: Kahn α} (a: α) (xs ys: Kahn α) (n: Nat) :
+  x.dest = .cons a xs → (y.burn n).dest = .cons a ys → r xs ys → leF r x y
+| eps {x y: Kahn α} (xs: Kahn α) :
+  x.dest = .eps xs → r xs y → leF r x y
 
-def Kahn.leF' : (Kahn α → Kahn α → Prop) →o (Kahn α → Kahn α → Prop) where
+-- A monotone version of the less than functor
+def Kahn.leF.mono : (Kahn α → Kahn α → Prop) →o (Kahn α → Kahn α → Prop) where
   toFun := leF
   monotone' := by
     intro p q h₁ k₁ k₂ h₂
     induction h₂ with
-    | eps x' h₂ =>
-      apply leF.eps x'
-      . assumption
-      . apply h₁
-        assumption
-    | cons a x' y' n h₂ h₃ h₄ =>
-      apply leF.cons a x' y' n h₂ h₃
-      . apply h₁
-        assumption
-
-@[simp] theorem Kahn.leF'.def (r: Kahn α → Kahn α → Prop) (x y: Kahn α) :
-  leF' r x y = leF r x y := by rfl
+    | eps xs h₂ h₃ =>
+      apply leF.eps xs h₂
+      apply h₁
+      assumption
+    | cons a xs ys n h₂ h₃ h₄ =>
+      apply leF.cons a xs ys n h₂ h₃
+      apply h₁
+      assumption
 
 
-instance : ScottContinuousNat (@Kahn.leF' α) where
+@[simp] theorem Kahn.leF.mono.def (r: Kahn α → Kahn α → Prop) (x y: Kahn α) :
+  leF.mono r x y = leF r x y := by rfl
+
+-- proof of the Scott Continuity of `leF`
+instance Kahn.leF.SC : ScottContinuousNat (@Kahn.leF.mono α) where
   scottContinuousNat := by
     intro S x y h₁
     simp only [infᵢ_apply, infᵢ_Prop_eq] at h₁
-    simp only [Kahn.leF'.def, infᵢ_apply, infᵢ_Prop_eq]
+    simp only [Kahn.leF.mono.def, infᵢ_apply, infᵢ_Prop_eq]
     have h₂ := h₁ 0
     induction h₂ with
-    | eps x' h₂ h₃ =>
-      apply Kahn.leF.eps x'
-      . assumption
-      . simp only [infᵢ_apply, infᵢ_Prop_eq]
-        intro n
-        specialize h₁ n
-        cases h₁ with
-        | cons _ _ _ _ h₄ =>
-          rw [h₂] at h₄
-          cases h₄
-        | eps _ h₄ h₅ =>
-          rw [h₂] at h₄
-          simp only [Kahn.F.eps.injEq] at h₄
-          rw [←h₄] at h₅
-          assumption
-    | cons a x' y' n h₂ h₃ h₄ =>
-      apply Kahn.leF.cons a x' y' n  h₂ h₃
+    | eps xs h₂ h₃ =>
+      apply Kahn.leF.eps xs h₂
+      simp only [infᵢ_apply, infᵢ_Prop_eq]
+      intro i
+      specialize h₁ i
+      cases h₁ with
+      | eps xs h₁ h₄ =>
+        rw [h₁, F.eps.injEq] at h₂
+        induction h₂
+        assumption
+      | cons a xs ys n h₁ h₄ h₅ =>
+        rw [h₁] at h₂
+        cases h₂
+    | cons a xs ys n h₂ h₃ _ =>
+      apply leF.cons a xs ys n  h₂ h₃
       simp only [infᵢ_apply, infᵢ_Prop_eq]
       intro i
       specialize h₁ i
@@ -495,12 +497,112 @@ instance : ScottContinuousNat (@Kahn.leF' α) where
         rw [h₂] at h₅
         cases h₅
       | cons _ _ _ m h₅ h₆ h₇ =>
-        rw [h₂] at h₅
-        simp only [Kahn.F.cons.injEq] at h₅
-        rw [←h₅.right] at h₇
-        sorry
+        rw [h₂, F.cons.injEq] at h₅
+        induction h₅.1
+        induction h₅.2
+        have h₃ := congrArg F.mk h₃
+        have h₆ := congrArg F.mk h₆
+        rw [mk_dest] at h₃ h₆
+        have := burn_cons_inj _ _ _ _ _ _ _ h₃ h₆
+        rw [this.2]
+        assumption
 
+instance Kahn.LE.inst : LE (Kahn α) where
+  le := OrderHom.gfp Kahn.leF.mono
 
+def Kahn.le.approx (n: Nat) (lhs rhs: Kahn α) : Prop :=
+  match n with
+  | 0   => True
+  | n+1 => leF (le.approx n) lhs rhs
 
+#check gfp.scott.unfold
+
+def Kahn.le.unfold (x y: Kahn α) : ((x ≤ y) = leF LE.le x y) := by
+  simp only [LE.le, gfp.scott.rewrite]
+  conv =>
+    lhs
+    rw [←gfp.scott.unfold]
+    rfl
+
+#check pgfp.accumulate
+#check pgfp.unfold
+#print pgfp.scott
+#check pgfp.theorem₂ (@Kahn.leF.mono α)
+
+def Kahn.le.rewrite (k₁ k₂: Kahn α) :
+  k₁ ≤ k₂ ↔ (∀ n, Kahn.le.approx n k₁ k₂) := by
+  simp only [LE.le, gfp.scott.rewrite, gfp.scott, infᵢ_apply, infᵢ_Prop_eq]
+  constructor
+  . intro h n
+    specialize h n
+    induction n generalizing k₁ k₂ with
+    | zero => trivial
+    | succ n h' =>
+      cases h with
+      | eps xs h₁ h₂ =>
+        rw [approx]
+        apply leF.eps xs h₁
+        apply h'
+        assumption
+      | cons a xs ys m h₁ h₂ h₃ =>
+        rw [approx]
+        apply leF.cons a xs ys m h₁ h₂
+        apply h'
+        apply h₃
+  . intro h n
+    specialize h n
+    induction n generalizing k₁ k₂ with
+    | zero => trivial
+    | succ n h' =>
+      rw [approx] at h
+      cases h with
+      | eps xs h₁ h₂ =>
+        apply leF.eps xs h₁
+        apply h'
+        apply h₂
+      | cons a xs ys m h₁ h₂ h₃ =>
+        apply leF.cons a xs ys m h₁ h₂
+        apply h'
+        apply h₃
+
+def Kahn.le.refl (x: Kahn α) : x ≤ x := by
+  have h: ∀ n, burn x n ≤ x := by
+    intro n
+    rw [Kahn.le.rewrite]
+    intro m
+    induction m generalizing n x with
+    | zero => trivial
+    | succ m h₁ =>
+      rw [approx]
+      generalize h₂: burn x n = y
+      cases y using Kahn.cases with
+      | eps ys =>
+        apply leF.eps ys
+        . rw [←F.mk.injEq, mk_dest]
+        . have h₂ := congrArg (fun k => k.burn 1) h₂
+          simp only [burn_compose, burn_eps, burn_zero] at h₂
+          rw [←h₂]
+          apply h₁
+      | cons y ys =>
+        apply leF.cons y ys ys n
+        . rw [←F.mk.injEq, dest_mk]
+        . rw [h₂, ←F.mk.injEq, dest_mk]
+        . conv =>
+            arg 2
+            . rw [←burn_zero ys]
+              rfl
+          apply h₁
+  apply h 0
+
+def Kahn.le_imp_eps_le (x y: Kahn α) (h₁: x ≤ y) : eps(x) ≤ y := by
+  rw [Kahn.le.unfold]
+  apply leF.eps x
+  . rfl
+  . assumption
+
+def Kahn.eps_le_imp_le (x y: Kahn α) (h₁: eps(x) ≤ y) : x ≤ y := by
+  rw [Kahn.le.unfold] at h₁
+  cases h₁
+  <;> sorry
 
 
