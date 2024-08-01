@@ -244,7 +244,7 @@ by
   rw [pgfp₁.accumulate]
   simp [Sup.sup, Bot.bot]
 
-def pgfp.monotone (p q:α → Prop) :
+def pgfp₁.monotone (p q:α → Prop) :
   p ≤ q → pgfp₁ f p ≤ pgfp₁ f q := by
   apply (pgfp₁ f).2
 
@@ -268,21 +268,34 @@ theorem pgfp₁.theorem (f: (α → Prop) →o (α → Prop)) (p: α → Prop) :
   λ h₁ x h₂ => (coinduction f p).2 h₁ x h₂
 end
 
-/-
-A coinduction is the application of a lemma `pgfp.theorem` but we have to find x and p using the current
-goal an hypothesis
-
-A coinduction theorem is a theorem of the form
-
-  (∀A, P A → ...) → ∀A, P A → ?goal A
-  and we want to apply it on goals of the form
-  ∀ B, ?goal Exprs
-
-  so we have to modify
-
--/
+section
+variable {α: Type u}
+variable {β: α → Type v}
 
 
+def pgfp₂.curry (f: (∀ x:α, β x → Prop) →o (∀ x: α, β x → Prop)) :
+  ((x: α) × β x → Prop) →o (x:α) × β x → Prop where
+  toFun r := λ ⟨x, y⟩ => f (λ a  b => r ⟨a, b⟩) x y
+  monotone' := by
+    rintro p q h _
+    apply f.monotone'
+    simp only [LE.le]
+    intro a b
+    apply h
+
+def pgfp₂.uncurry (f: ((x: α) × β x → Prop) →o (x:α) × β x → Prop) :
+  (∀ x:α, β x → Prop) →o (∀ x: α, β x → Prop) where
+  toFun r := λ x y => f (λ ⟨a, b⟩ => r a b) ⟨x, y⟩
+  monotone' := by
+    rintro p q h _ _
+    apply f.monotone'
+    simp only [LE.le]
+    intro a b
+    apply h
+    assumption
+
+
+end
 open Lean Lean.Expr Lean.Meta Lean.Elab.Tactic
 open Qq
 
@@ -290,73 +303,6 @@ open Qq
 namespace Tactic.pgfp₁
 
 open Lean Expr Elab Term Tactic Meta Qq
-
-/-- tactic for proof by bisimulation on streams -/
-syntax "pgfp₁" (ppSpace colGt term) (" with" (ppSpace colGt binderIdent)+)? : tactic
-syntax "pgfp₂" (ppSpace colGt term) (" with" (ppSpace colGt binderIdent)+)? : tactic
-
-
-def matchPGFP? (e:Q(Prop)) : MetaM (Option (Expr × Expr)) :=
-  match e with
-  | .app _ x => do
-    let t ← inferType x
-    return .some (t, x)
-  | .mdata _ e => matchPGFP? e
-  | _ => return .none
-
-
-#check matchEq?
-
-elab_rules : tactic
-  | `(tactic| pgfp₁ $e $[ with $ids:binderIdent*]?) => do
-    let ids : TSyntaxArray `Lean.binderIdent := ids.getD #[]
-    let idsn (n : ℕ) : Name :=
-      match ids[n]? with
-      | some s =>
-        match s with
-        | `(binderIdent| $n:ident) => n.getId
-        | `(binderIdent| _) => `_
-        | _ => unreachable!
-      | none => `_
-    let idss (n : ℕ) : TacticM (TSyntax `rcasesPat) := do
-      match ids[n]? with
-      | some s =>
-        match s with
-        | `(binderIdent| $n:ident) => `(rcasesPat| $n)
-        | `(binderIdent| _%$b) => `(rcasesPat| _%$b)
-        | _ => unreachable!
-      | none => `(rcasesPat| _)
-    withMainContext do
-      let e ← Tactic.elabTerm e none
-      let f ← liftMetaTacticAux fun g => do
-        let (#[fv], g) ← g.generalize #[{ expr := e }] | unreachable!
-        return (mkFVar fv, [g])
-      withMainContext do
-        let some (t, l) ← matchPGFP? (←getMainTarget) | throwError "goal is not an application"
-        let ex ←
-          withLocalDecl (idsn 1) .default t fun v₀ => do
-            let x₀ ← mkEq v₀ l
-            let ex₁ ← mkLambdaFVars #[f] x₀
-            let ex₂ ← mkAppM ``Exists #[ex₁]
-            mkLambdaFVars #[v₀] ex₂
-        let R ← liftMetaTacticAux fun g => do
-          let g₁ ← g.define (idsn 0) (← mkArrow t (mkSort .zero)) ex
-          let (Rv, g₂) ← g₁.intro1P
-          return (mkFVar Rv, [g₂])
-        withMainContext do
-          ids[0]?.forM fun s => addLocalVarInfoForBinderIdent R s
-          let sR ← exprToSyntax R
-          evalTactic <| ← `(tactic|
-            refine pgfp₁.theorem _ $sR ?_ _ ⟨_, rfl⟩;
-            rintro $(← idss 1) $(← idss 2))
-          liftMetaTactic fun g => return [← g.clear f.fvarId!]
-    for n in [6 : ids.size] do
-      let name := ids[n]!
-      logWarningAt name m!"unused name: {name}"
-
-#check MVarId.generalize
-
-
 
 #check 42
 
@@ -404,16 +350,25 @@ def Property.parse : List Expr → MetaM ((P: Q(Prop)) × Q($P))
 
 def Exists_intro {α: Sort u} (P: α → Prop) (x: α) (h: P x) : Exists P := Exists.intro x h
 
-elab "custom_pgfp" "[" h:term,* "]" "generalizing" "[" args:term,* "]"  : tactic => do
+elab "pgfp₁" "[" hyps:term,* "]" "generalizing" "[" args:term,* "]"  : tactic => do
+  have hyps : Array Term := hyps
 
   withMainContext do
     let mvarid ← getMainGoal
     let goal ← getMainTarget
     let ⟨u, α, f, p, e⟩ ← Goal.parse goal
-    let ⟨P, h⟩ ← Property.parse <| List.reverse <| Array.toList <| ← Array.mapM (λ h => Tactic.elabTerm h none) h
+    let ⟨P, h⟩ ← Property.parse <| List.reverse <| Array.toList <| ← Array.mapM (λ h => Tactic.elabTerm h none) hyps
 
-    let new_goal : Q(∀ x, x = $e ∧ $P → pgfp₁ $f $p x) ← mkFreshExprMVarQ q(∀ x, x = $e ∧ $P → pgfp₁ $f $p x)
-    mvarid.assign q($new_goal $e ⟨rfl, $h⟩)
+    let new_goal ← (
+      if Array.size (Array.map id hyps) = 0 then do
+        let new_goal : Q(∀ x, x = $e → pgfp₁ $f $p x) ← mkFreshExprMVarQ q(∀ x, x = $e → pgfp₁ $f $p x)
+        mvarid.assign q($new_goal $e rfl)
+        return new_goal
+      else do
+        let new_goal : Q(∀ x, x = $e ∧ $P → pgfp₁ $f $p x) ← mkFreshExprMVarQ q(∀ x, x = $e ∧ $P → pgfp₁ $f $p x)
+        mvarid.assign q($new_goal $e ⟨rfl, $h⟩)
+        return new_goal
+      )
 
     let (fvars, mvarid) ← new_goal.mvarId!.generalize (← Array.mapM (λ e => do return {expr := ← Tactic.elabTerm e none}) args)
 
@@ -422,8 +377,6 @@ elab "custom_pgfp" "[" h:term,* "]" "generalizing" "[" args:term,* "]"  : tactic
     replaceMainGoal [mvarid]
 
     withMainContext $ do
-      let g ← getMainTarget
-      dbg_trace f!"{← instantiateMVars g}"
       let sF ← exprToSyntax f
       let P ← inferType init
       let (P_closed, init_closed) ← Array.foldlM (λ (P, h) fv => do
@@ -438,6 +391,7 @@ elab "custom_pgfp" "[" h:term,* "]" "generalizing" "[" args:term,* "]"  : tactic
       evalTactic <| ← `(tactic|
         apply pgfp₁.theorem $sF $sP ?_ _ $(← exprToSyntax init_closed);
         clear $(←exprToSyntax init);
+        try clear $(←exprToSyntax (mkFVar e));
       )
       let _ ← Array.mapM (λ fv => do evalTactic <| ← `(tactic| clear $(←exprToSyntax (mkFVar fv)))) fvars
       return ()
@@ -455,7 +409,109 @@ elab "custom_pgfp" "[" h:term,* "]" "generalizing" "[" args:term,* "]"  : tactic
 #print FVarSubst
 #check Nat.le_refl
 #check MVarId.introNP
+#check mkFreshExprMVar
 
+#eval ("1" ++ "2")
+
+def matchAppN : Expr → Nat → Option (Expr × List Expr) :=
+  λ e n => (λ (x, l) => (x, l.reverse)) <$> go e n
+where
+  go : Expr → Nat → Option (Expr × List Expr)
+  | .mdata _ e, n+1 => go e (n+1)
+  | .app e a, n+1 => do
+    let (e, l) ← go e n
+    return (e, a :: l)
+  | e, 0 => some (e, [])
+  | _, _ => none
+
+def errorMessage :=
+  "A coinduction theorem must be of the form:\n" ++
+  "(p: ∀ (x₁:T₁) ... (xₙ:Tₙ) → Prop) → " ++
+  "(∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?coindGoalFn p x₁ ... xₙ) → " ++
+  "∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?goalFn x₁ ... xₙ" ++
+  "and the goal must be of the form" ++
+  "?goalFn, e₁, ..., eₙ" ++
+  "\n"
+
+def parseThmArgs (l: List α) : Option (α × α × List α × α) := do
+  let P :: hyp :: args := l | none
+  if args.length = 0 then none
+  let (args, [h]) := args.splitAt (args.length -1) | none
+  return (P, hyp, args, h)
+
+-- the coinduction theorem must be of the form
+-- (p: ∀ (x₁:T₁) ... (xₙ:Tₙ) → Prop) →
+-- (∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?coindGoalFn p x₁ ... xₙ) →
+-- ∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?goalFn x₁ ... xₙ
+-- and the goal must be of the form
+-- ?goalFn, e₁, ..., eₙ
+def parseGoal (goal: Expr) (thm: Expr) : MetaM (Expr × List Expr) := do
+  forallTelescope thm λ args goalPure => do
+    let .some (_, _, args, _) := parseThmArgs args.toList | throwError ("length error: " ++ errorMessage)
+    let .some (goalFn, _) := matchAppN goalPure args.length | throwError errorMessage
+    let .some (goalFn', exprs) := matchAppN goal args.length | throwError errorMessage
+    -- TODO: test if fvars and args are defEq
+    if not (←isDefEq goalFn goalFn') then
+      throwError "the goal and the coinduction theorem doesn't match"
+    return (goalFn, exprs)
+
+elab "coinduction" "[" hyps:term,* "]" "generalizing" "[" args:term,* "]" "using" thm:term : tactic => do
+  let thm ← Tactic.elabTerm thm none
+  have hyps : Array Term := hyps
+
+  withMainContext do
+    let mvarid ← getMainGoal
+    let goal ← getMainTarget
+    let (goalFn, exprs) ← parseGoal goal (← inferType thm)
+
+    let ⟨P, h⟩ ← Property.parse
+      <| List.reverse <| Array.toList <| ← Array.mapM (λ h => Tactic.elabTerm h none) hyps
+
+    let new_goal ← mkFreshExprMVar <| .some <| ← forallTelescope (← inferType thm) λ args goalPure => do
+      let .some (_, _, args, _) := parseThmArgs args.toList | throwError errorMessage
+      let .some (_, exprs) := matchAppN goal args.length | throwError errorMessage
+      let P ← List.foldlM (λ P (e, fv) => do
+          mkAppM `And #[← mkAppM `Eq #[fv, e], P]
+        ) P (List.zip exprs args)
+      mkForallFVars (.mk args) (←mkArrow P goalPure)
+
+    let h ← forallTelescope (← inferType thm) λ args _ => do
+      let .some (_, _, args, _) := parseThmArgs args.toList | throwError errorMessage
+      let .some (_, exprs) := matchAppN goal args.length | throwError errorMessage
+      List.foldlM (λ h e => do
+          mkAppM `And.intro #[← mkAppM `Eq.refl #[e], h]
+        ) h exprs
+
+    mvarid.assign <| .app (mkAppN new_goal <| .mk exprs) h
+    --replaceMainGoal [new_goal.mvarId!, mvarid]
+
+    let (fvars, mvarid) ← new_goal.mvarId!.generalize (← Array.mapM (λ e => do return {expr := ← Tactic.elabTerm e none}) args)
+
+    let (vars, mvarid) ← mvarid.introNP (1 + exprs.length)
+    let (vars, [init]) := vars.toList.splitAt (vars.size-1) | unreachable!
+    let init := mkFVar init
+    replaceMainGoal [mvarid]
+
+    withMainContext $ do
+      let P ← inferType init
+      let (P_closed, init_closed) ← Array.foldlM (λ (P, h) fv => do
+        if containsFVar P fv then do
+          let P_fun ← mkLambdaFVars #[mkFVar fv] P
+          let P ← mkAppM ``Exists #[←mkLambdaFVars #[mkFVar fv] P]
+          let h ← mkAppM ``Tactic.pgfp₁.Exists_intro #[P_fun, mkFVar fv, h]
+          return ⟨P, h⟩
+        else return (P, h)
+      ) (P, init) (Array.reverse fvars)
+      let sP ← exprToSyntax (← mkLambdaFVars (.mk <| List.map mkFVar vars) P_closed)
+      evalTactic <| ← `(tactic|
+        apply $(←exprToSyntax thm) $sP ?_ <;> try exact $(← exprToSyntax init_closed);
+      )
+      evalTactic <| ← `(tactic|
+        clear $(←exprToSyntax init);
+      )
+      let _ ← Array.mapM (λ fv => do evalTactic <| ← `(tactic| clear $(←exprToSyntax (mkFVar fv)))) fvars
+      let _ ← List.mapM (λ fv => do evalTactic <| ← `(tactic| try clear $(←exprToSyntax (mkFVar fv)))) vars
+      return ()
 
 def forallℕ (P: Nat → Prop) : (Nat → Prop) →o Nat → Prop where
   toFun r n := P n ∧ r (n+1)
@@ -466,18 +522,49 @@ def forallℕ (P: Nat → Prop) : (Nat → Prop) →o Nat → Prop where
     . apply h₁
       assumption
 
+#check pgfp₁.theorem (forallℕ λ n => n > 0)
 example : pgfp₁ (forallℕ λ n => n > 0) ⊥ 1 := by
-  let one : Nat := 1
-  have h₁ : 1 = one := Eq.refl 1
-  rw [h₁]
-  have h₂ : 1 ≤ one ∧ True := by simp_arith
-  custom_pgfp [h₂, True.intro] generalizing [one, 2]
-  rintro n ⟨m, eq, ⟨h₁, _⟩, _⟩
+  let one  := 1
+  have h₂ : one ≤ 1 := Nat.le_refl 1
+  coinduction [h₂] generalizing [1]  using pgfp₁.theorem (forallℕ λ n => n > 0)
+  rintro n ⟨m, eq, h⟩
   induction eq
   constructor
   . simp_arith [*]
   . apply Or.inl
+    simp only
     simp_arith [*]
+
+def waitF (P: Nat → Prop) (Q: Int → Prop) : (Nat → Int → Prop) →o (Nat → Int → Prop) where
+  toFun r n m := P n ∧ r (n+1) (m+1) ∨ Q m
+  monotone' := by
+    rintro R S h₁ n m (⟨h₂, h₃⟩ | h₂)
+    . apply Or.inl
+      constructor
+      . assumption
+      . apply h₁
+        assumption
+    . apply Or.inr
+      assumption
+
+def wait (P: Nat → Prop) (Q: Int → Prop) (n: Nat) (m: Int) : Prop := gfp₁ (pgfp₂.curry <| waitF P Q) ⟨n, m⟩
+
+def wait.coind P Q (motiv: Nat → (m:Int) → Prop) (hyp: ∀ n m, motiv n m → waitF P Q motiv n m) :
+  ∀ n m, motiv n m → wait P Q n m := by
+  intro n m h₁
+  rw [wait]
+  apply gfp₁.tarski _ λ ⟨n, m⟩ => motiv n m
+  . intro ⟨n, m⟩ h₂
+    apply hyp
+    apply h₂
+  . apply h₁
+
+example : wait (λ n => n ≤ 10) (λ n => n ≤ 10) 0 1 := by
+  let one := 1
+  have h: 0+one = 1 := by simp
+  coinduction [h] generalizing [0, 1] using wait.coind (λ n => n ≤ 10) (λ n => n ≤ 10)
+  intro n m ⟨x, y, h₁, h₂, h₃⟩
+  sorry
 
 end Tactic.pgfp₁
 

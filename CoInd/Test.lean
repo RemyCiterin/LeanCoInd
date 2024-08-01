@@ -2,6 +2,7 @@ import Qq
 import Lean
 import CoInd.M
 import CoInd.Paco
+import CoInd.Kahn2
 
 universe u₀ u₁ u₂ u₃ u₄
 
