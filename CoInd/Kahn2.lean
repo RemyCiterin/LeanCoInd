@@ -5,7 +5,8 @@ import CoInd.Container
 import CoInd.Utils
 import CoInd.Eqns
 import CoInd.Std.DelabRule
-import CoInd.CPO
+import Mathlib.Order.OmegaCompletePartialOrder
+import Mathlib.Topology.OmegaCompletePartialOrder
 
 
 import Mathlib.Tactic.Linarith
@@ -617,13 +618,41 @@ theorem Kahn.le_lub (f: Nat →o Kahn α) (n: Nat) (X : Kahn α) (hX: X ≤ f n)
           apply f.monotone'
           simp
 
-noncomputable instance : ωCPO (Kahn α) where
-  bot_le {x} := Kahn.bot_le x
-  lub := Kahn.lub
-  lub_le {f x} h := Kahn.lub_le f x h
-  le_lub {f n} := Kahn.le_lub f n (f n) (le_refl _)
+--noncomputable instance : ωCPO (Kahn α) where
+--  bot_le {x} := Kahn.bot_le x
+--  lub := Kahn.lub
+--  lub_le {f x} h := Kahn.lub_le f x h
+--  le_lub {f n} := Kahn.le_lub f n (f n) (le_refl _)
 
-#print ωCPO
+noncomputable instance : OmegaCompletePartialOrder (Kahn α) where
+  le_antisymm := by
+    intro a b h₁ h₂
+    coinduction [h₁, h₂] generalizing [a, b] using Kahn.bisim
+    clear h₁ h₂ a b
+    intro s₁ s₂ ⟨a, b, eq₁, eq₂, h₁, h₂⟩
+    induction eq₁
+    induction eq₂
+    rw [Kahn.le.unfold] at h₁
+    cases h₁ with
+    | bot h₁ =>
+      induction h₁
+      have := Kahn.le_bot _ h₂
+      induction Eq.symm this
+      induction h₂
+      apply Kahn.eqF.bot rfl rfl
+    | cons x xs ys eq₁ eq₂ h₁ =>
+      induction eq₁
+      induction eq₂
+      rw [Kahn.le_cons] at h₂
+      have h₃ := h₂.right
+      apply Kahn.eqF.cons x xs ys rfl rfl
+      exists xs
+      exists ys
+
+  ωSup := Kahn.lub
+
+  ωSup_le f x h := Kahn.lub_le f x h
+  le_ωSup f n := Kahn.le_lub f n (f n) (le_refl _)
 
 def Kahn.fst {α: Type u} {β: Type v} (k: Kahn (α × β)) : Kahn α :=
   corec (fun k => Kahn.cases k (cons:= λ  x xs => F.cons x.fst xs) (bot := F.bot)) k
@@ -780,10 +809,10 @@ attribute [eqns Kahn.tup.unfold_cons Kahn.tup.unfold_bot_left Kahn.tup.unfold_bo
 def Kahn.fby (x y: Kahn α) : Kahn α :=
   Kahn.cases x (cons := λ x _ => x ::: y) (bot := ⊥)
 
-def Kahn.fby.unfold_bot (x: Kahn α) : fby ⊥ x = ⊥ := by
+@[simp] def Kahn.fby.unfold_bot (x: Kahn α) : fby ⊥ x = ⊥ := by
   rw [fby, Kahn.cases_bot]
 
-def Kahn.fby.unfold_cons (x : α) (xs y: Kahn α) :
+@[simp] def Kahn.fby.unfold_cons (x : α) (xs y: Kahn α) :
   fby (x ::: xs) y = x ::: y := by
   rw [fby, Kahn.cases_cons]
 
@@ -804,4 +833,71 @@ theorem Kahn.fby.monotone (x y z w: Kahn α) :
     induction h₂
     rw [unfold_cons, unfold_cons, le_cons]
     trivial
+
+def Kahn.map {α: Type u} {β: Type v} (f: α → β) (x: Kahn α) : Kahn β :=
+  Kahn.corec (λ x =>
+      Kahn.cases x (cons := λ x xs =>
+        .cons (f x) xs
+      ) (bot := .bot)
+    ) x
+
+@[simp] def Kahn.map.unfold_bot {α: Type u} {β: Type v} (f: α → β) :
+  map f ⊥ = ⊥ := by
+  rw [map, corec.unfold, Kahn.cases_bot]
+
+@[simp] def Kahn.map.unfold_cons {α: Type u} {β: Type v} (f: α → β) (x: α) (xs: Kahn α) :
+  map f (x ::: xs) = f x ::: map f xs := by
+  rw [map, corec.unfold, Kahn.cases_cons]
+  rfl
+
+attribute [eqns Kahn.map.unfold_bot Kahn.map.unfold_cons] Kahn.map
+
+@[mono] theorem Kahn.map.monotone {α: Type u} {β: Type v} (f: α → β) :
+  ∀ x y, x ≤ y → map f x ≤ map f y := by
+  intro x y h₁
+  coinduction [h₁] generalizing [x, y] using Kahn.le.coind _
+  clear h₁ x y
+  intro _ _ ⟨x, y, h₁, h₂, h₃⟩
+  induction h₁
+  induction h₂
+  rw [le.unfold] at h₃
+  cases h₃ with
+  | bot h =>
+    induction h
+    rw [map.unfold_bot]
+    apply leF.bot rfl
+  | cons x xs ys h₁ h₂ h₃ =>
+    induction h₁
+    induction h₂
+    rw [unfold_cons, unfold_cons]
+    apply leF.cons (f x) (map f xs) (map f ys) rfl rfl
+    apply Or.inl
+    exists xs
+    exists ys
+
+def Kahn.next (x: Kahn α) : Kahn α :=
+  Kahn.cases x (cons := λ _ xs => xs) (bot := ⊥)
+
+@[simp] def Kahn.next.unfold_bot : @next α ⊥ = ⊥ := by
+  rw [next, Kahn.cases_bot]
+
+@[simp] def Kahn.next.unfold_cons (x : α) (xs : Kahn α) : next (x ::: xs) = xs := by
+  rw [next, Kahn.cases_cons]
+
+attribute [eqns Kahn.next.unfold_cons Kahn.next.unfold_bot] Kahn.next
+
+@[mono] theorem Kahn.next.monotone :
+  ∀ x y: Kahn α, x ≤ y → next x ≤ next y := by
+  intro x y h₁
+  rw [le.unfold] at h₁
+  cases h₁ with
+  | bot h =>
+    induction h
+    rw [unfold_bot]
+    apply bot_le
+  | cons x xs ys h₁ h₂ h₃ =>
+    induction h₁
+    induction h₂
+    rw [unfold_cons, unfold_cons]
+    assumption
 
