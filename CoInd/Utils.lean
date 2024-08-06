@@ -21,9 +21,10 @@ def M.construct (x : C.Obj C.M) : C.M where
       intro k
       apply (x.snd k).agrees
 
-@[simp] theorem M.destruct_construct (x: C.Obj C.M) : (construct x).destruct = x := by rfl
+@[simp] theorem M.destruct_construct (x: C.Obj C.M) : destruct (construct x) = x :=
+  rfl
 
-theorem M.destruct.uniq (x y: C.M) : x.destruct = y.destruct → x = y := by
+theorem M.destruct.inj (x y: C.M) : x.destruct = y.destruct → x = y := by
   intro h
   apply M.bisim (λ x y => x.destruct = y.destruct)
   intro x y h
@@ -34,14 +35,31 @@ theorem M.destruct.uniq (x y: C.M) : x.destruct = y.destruct → x = y := by
   simp only [implies_true, and_self]
   assumption
 
+
+@[simp] theorem M.destruct.injEq (x y: C.M) : (x.destruct = y.destruct) = (x = y) := by
+  apply propext
+  constructor
+  . exact inj _ _
+  . intro h
+    induction h
+    rfl
+
 @[simp] theorem M.construct_destruct (x: C.M) : construct (destruct x) = x := by
-  apply M.destruct.uniq
+  apply M.destruct.inj
   rfl
 
 
-def M.construct_inj {x y: C.Obj C.M} (h: construct x = construct y) : x = y := by
+def M.construct.inj (x y: C.Obj C.M) (h: construct x = construct y) : x = y := by
   rw [← destruct_construct x, h]
   rfl
+
+@[simp] theorem M.construct.injEq (x y: C.Obj C.M) : (construct x = construct y) = (x = y) := by
+  apply propext
+  constructor
+  . exact inj _ _
+  . intro h
+    induction h
+    rfl
 
 
 protected def M.cases {r: C.M → Sort w} (f: ∀ x: C.Obj C.M, r (M.construct x)) (x: C.M) : r x :=
@@ -52,6 +70,41 @@ protected def M.casesOn' {r: C.M → Sort w} (x: C.M) (f: ∀ x: C.Obj C.M, r (M
 
 @[simp] theorem M.cases_construct {r: C.M → Sort w} (f: ∀ x:C.Obj C.M, r (M.construct x)) (x: C.Obj C.M) :
   M.cases f (construct x) = f x := by rfl
+
+-- this proof doesn't work by rfl...
+theorem M.corec.unfold {β: Type w} (f: β → C.Obj β) (x₀: β) :
+  corec f x₀ = construct (C.Map (corec f) (f x₀)) := by
+  simp only [corec, construct, M.mk.injEq, Map, Approx.corec, Function.comp]
+  funext n
+  cases n
+  <;>
+  rfl
+  --rw [←destruct.injEq, destruct_construct]
+  --rfl
+
+
+--@[simp] theorem M.cases_corec {r: C.M → Sort v} (k: ∀ x: C.Obj C.M, r (M.construct x)) {β: Type w} (f: β → C.Obj β) (x₀: β) :
+--  M.cases k (corec f x₀) = k (Map (corec f) (f x₀)) := by
+--  sorry
+
+-- a bisimulation based on the construct operator
+theorem M.bisim_using_construct (r: C.M → C.M → Prop)
+  (hyp: ∀ x y, r x y → ∃ n k₁ k₂, construct ⟨n, k₁⟩ = x ∧ construct ⟨n, k₂⟩ = y ∧ ∀ a, r (k₁ a) (k₂ a)) :
+  ∀ x y, r x y → x = y := by
+  apply bisim r
+  intro x y h₁
+  specialize hyp x y h₁
+  have ⟨n, k₁, k₂, h₁, h₂, h₃⟩ := hyp
+  exists n, k₁, k₂
+  induction h₁
+  induction h₂
+  constructor
+  . rfl
+  . constructor
+    . rfl
+    . exact h₃
+
+
 
 end Container
 

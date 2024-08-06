@@ -17,6 +17,9 @@ import Lean.Data.RBMap
 import Lean.Data.RBTree
 import Qq
 
+
+open OmegaCompletePartialOrder
+
 universe u v w u₀ u₁ u₂
 
 variable {α : Type u}
@@ -688,7 +691,6 @@ theorem Kahn.fst.monotone {α: Type u} {β: Type v} :
     apply Or.inl
     exists xs
     exists ys
-
 
 def Kahn.snd {α: Type u} {β: Type v} (k: Kahn (α × β)) : Kahn β :=
   corec (fun k => Kahn.cases k (cons:= λ  x xs => F.cons x.snd xs) (bot := F.bot)) k

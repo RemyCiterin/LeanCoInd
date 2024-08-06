@@ -86,7 +86,17 @@ def M.destruct (m:M C) : C.Obj (M C) where
 def Approx.corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) : ∀ n:Nat, Approx C n
 | 0 => .MStop
 | .succ n =>
-  .MStep (f x₀).fst (λ x => Approx.corec f ((f x₀).snd x) n)
+  .MStep (f x₀).fst (λ a => Approx.corec f ((f x₀).snd a) n)
+
+theorem Approx.corec.unfold {β: Type w} (f: β → C.Obj β) (x₀: β) (n:Nat) :
+  Approx.corec f x₀ n =
+    match n with
+    | 0 => .MStop
+    | .succ n =>
+      .MStep (f x₀).fst (λ x => Approx.corec f ((f x₀).snd x) n)
+  := by
+  cases n <;>
+  rfl
 
 def Agree.corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) (n:Nat) :
   Agree (Approx.corec f x₀ n) (Approx.corec f x₀ (.succ n)) :=
@@ -106,7 +116,7 @@ def M.corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) : M C where
 #check Container
 
 theorem M.destruct_corec {α:Type u₃} (f:α → C.Obj α) (x₀:α) :
-  (M.corec f x₀).destruct = C.Map (M.corec f) (f x₀) := Eq.refl _
+  (M.corec f x₀).destruct = C.Map (M.corec f) (f x₀) := rfl
 
 #check cast_heq
 
@@ -236,61 +246,3 @@ by
 #check M.bisim
 
 end Container
---open Lean Expr Elab Term Tactic Meta Qq
-
--- syntax "m_bisim" (ppSpace colGt term) (" with" (ppSpace colGt binderIdent)+)? : tactic
---
---
--- elab_rules : tactic
---   | `(tactic| m_bisim $e $[ with $ids:binderIdent*]?) => do
---     let ids : TSyntaxArray `Lean.binderIdent := ids.getD #[]
---     let idsn (n : Nat) : Name :=
---       match ids[n]? with
---       | some s =>
---         match s with
---         | `(binderIdent| $n:ident) => n.getId
---         | `(binderIdent| _) => `_
---         | _ => unreachable!
---       | none => `_
---     let idss (n : Nat) : TacticM (TSyntax `rcasesPat) := do
---       match ids[n]? with
---       | some s =>
---         match s with
---         | `(binderIdent| $n:ident) => `(rcasesPat| $n)
---         | `(binderIdent| _%$b) => `(rcasesPat| _%$b)
---         | _ => unreachable!
---       | none => `(rcasesPat| _)
---     withMainContext do
---       let e ← Tactic.elabTerm e none
---       let f ← liftMetaTacticAux fun g => do
---         let (#[fv], g) ← g.generalize #[{ expr := e }] | unreachable!
---         return (mkFVar fv, [g])
---       withMainContext do
---         let some (t, l, r) ← matchEq? (← getMainTarget) | throwError "goal is not an equality"
---         let ex ←
---           withLocalDecl (idsn 1) .default t fun v₀ =>
---             withLocalDecl (idsn 2) .default t fun v₁ => do
---               let x₀ ← mkEq v₀ l
---               let x₁ ← mkEq v₁ r
---               let xx ← mkAppM ``And #[x₀, x₁]
---               let ex₁ ← mkLambdaFVars #[f] xx
---               let ex₂ ← mkAppM ``Exists #[ex₁]
---               mkLambdaFVars #[v₀, v₁] ex₂
---         let R ← liftMetaTacticAux fun g => do
---           let g₁ ← g.define (idsn 0) (← mkArrow t (← mkArrow t (mkSort .zero))) ex
---           let (Rv, g₂) ← g₁.intro1P
---           return (mkFVar Rv, [g₂])
---         withMainContext do
---           ids[0]?.forM fun s => Meta.addLocalVarInfoForBinderIdent R s
---           let sR ← exprToSyntax R
---           evalTactic <| ← `(tactic|
---             --refine MvQPF.Cofix.bisim₂ $sR ?_ _ _ ⟨_, rfl, rfl⟩;
---             --refine Container.M.bisim $sR ?_ _ _ ⟨_, rfl, rfl⟩;
---             refine Container.M.bisim $sR ?_ _ _ ⟨_, rfl, rfl⟩;
---             rintro $(← idss 1) $(← idss 2) ⟨$(← idss 3), $(← idss 4), $(← idss 5)⟩)
---           liftMetaTactic fun g => return [← g.clear f.fvarId!]
---     for n in [6 : ids.size] do
---       let name := ids[n]!
---       logWarningAt name m!"unused name: {name}"
--- #check Container.M.bisim
-

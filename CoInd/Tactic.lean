@@ -1,8 +1,8 @@
-
 import Qq
 import Lean
 import Std
-
+import CoInd.Attr
+import Mathlib.Tactic.SolveByElim
 
 universe u v w
 
@@ -137,4 +137,25 @@ elab "coinduction" "[" hyps:term,* "]" "generalizing" "[" args:term,* "]" "using
       return ()
 
 end Tactic.Coinduction
+
+
+namespace Mathlib.Tactic.OmegaCompletePartialOrder.Admissible
+
+open Lean Elab Tactic Parser Tactic
+open Mathlib Tactic SolveByElim
+
+syntax (name := refinment_type) "refinment_type" : tactic
+
+elab_rules : tactic
+| `(tactic| refinment_type ) => do
+  let cfg ← elabApplyRulesConfig <| mkNullNode #[]
+  let cfg := { cfg.noBackTracking with
+    transparency := .reducible
+    failAtMaxDepth := false
+    exfalso := false }
+  liftMetaTactic fun g => do solveByElim.processSyntax cfg false false [] [] #[mkIdent `refinment_type] [g]
+
+
+end Mathlib.Tactic.OmegaCompletePartialOrder.Admissible
+
 
