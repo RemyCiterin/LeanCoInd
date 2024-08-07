@@ -1,22 +1,15 @@
+import Mathlib.CategoryTheory.ConcreteCategory.BundledHom
+import Mathlib.CategoryTheory.ConcreteCategory.Bundled
 import Mathlib.Order.OmegaCompletePartialOrder
---import Mathlib.CategoryTheory.Closed.Cartesian
+import Mathlib.CategoryTheory.Closed.Cartesian
 import Mathlib.Tactic.Linarith
 import CoInd.Tactic
 
 open OmegaCompletePartialOrder
 
---instance {α: Type u} {β: Type v} [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β]
---  : FunLike (α →𝒄 β) α β where
---  coe f := f.toOrderHom
---  coe_injective' := by
---    intro f g h₁
---    cases f with
---    | mk f' _ =>
---    cases g with
---    | mk g' _ =>
---    cases f'
---    cases g'
---    congr
+
+@[simp] def OrderHom.mk_apply {α: Type u} {β: Type v} [Preorder α] [Preorder β]
+  (f: α → β) (hf: Monotone f) (x: α) : (OrderHom.mk f hf) x = f x := rfl
 
 -- define projections, map and lift operations over Pi types
 namespace Pi
@@ -421,7 +414,7 @@ def Or.sequence_spec (p: Admissible α) (c: Chain α) :
     specialize h₁ 0
     assumption
   | succ m =>
-    simp [Chain.filter, sequence', sequence, prop]
+    simp only [Chain.filter, sequence', sequence, prop]
     apply @Classical.epsilon_spec _ (λ m' => p <| c <| sequence p c m + 1 + m')
     apply h₁
 
@@ -560,73 +553,367 @@ def prod (f: α →𝒄 β) (g: α →𝒄 γ) : α →𝒄 β × γ where
 #check le_ωSup
 
 @[simps! apply]
-def curry : (α × β →𝒄 γ) →𝒄 α →𝒄 β →𝒄 γ where
-  toFun foo :=
-    { toFun := λ x => foo.comp (prod (const x) id)
-    , monotone' := by
-        intro a b h₁ x
-        apply foo.monotone'
-        constructor
-        · apply h₁
-        · apply le_refl
-    , cont := by
-        intro chain
-        apply ContinuousHom.ext
-        intro x
-        simp
-        calc
-          _ = foo (ωSup (Chain.zip chain (OrderHom.const _ x))) := by
-            apply congrArg
-            rw [Prod.mk.injEq]
-            constructor
-            · rfl
-            · apply le_antisymm
-              · apply le_ωSup (OrderHom.const ℕ x) 0
-              · apply ωSup_le
-                intro _
-                apply le_refl
-          _ = ωSup (Chain.map (Chain.zip chain (OrderHom.const _ x)) foo) := foo.cont _
-          _ = _ := rfl
-    }
+def curry.hom (f: α × β →𝒄 γ) : α →𝒄 β →𝒄 γ where
+  toFun x := f.comp (prod (const x) id)
   monotone' := by
-    intro f₁ f₂ h₁ x y
-    exact h₁ _
+    intro a b h₁ x
+    apply f.monotone'
+    constructor
+    · apply h₁
+    · apply le_refl
   cont := by
     intro chain
+    apply ContinuousHom.ext
+    intro x
+    simp
+    calc
+      _ = f (ωSup (Chain.zip chain (OrderHom.const _ x))) := by
+        apply congrArg
+        rw [Prod.mk.injEq]
+        constructor
+        · rfl
+        · apply le_antisymm
+          · apply le_ωSup (OrderHom.const ℕ x) 0
+          · apply ωSup_le
+            intro _
+            apply le_refl
+      _ = ωSup (Chain.map (Chain.zip chain (OrderHom.const _ x)) f) := f.cont _
+      _ = _ := rfl
+
+@[simps! apply]
+def curry.inv (f: α →𝒄 β →𝒄 γ) : α × β →𝒄 γ where
+  toFun p := f p.fst p.snd
+  monotone' := by
+    intro ⟨x, y⟩ ⟨z, t⟩ ⟨h₁, h₂⟩
+    apply ((f x).monotone' h₂).trans
+    apply f.monotone'
+    assumption
+  cont := by
+    intro chain
+    calc
+      _ = f (ωSup (chain.map OrderHom.fst)) (ωSup (chain.map OrderHom.snd)) := by rfl
+      _ = ωSup ((chain.map OrderHom.snd).map <| f (ωSup (chain.map OrderHom.fst))) := by
+        rw [(f _).continuous]
+      _ = ωSup ((chain.map OrderHom.snd).map <| ωSup ((chain.map OrderHom.fst).map (toMono.comp f))) := by
+        rw [f.continuous]
+        rfl
+      _ = _ := by
+        simp only [ωSup, Prod.ωSup, OmegaCompletePartialOrder.ωSup, Chain.map,OrderHom.comp, Function.comp]
+        apply le_antisymm
+        <;> apply ωSup_le
+        <;> intro n
+        · apply ωSup_le
+          intro m
+          cases Nat.le_or_le n m with
+          | inl h =>
+            rw [OrderHom.mk_apply]
+            apply ((f (chain m).fst).monotone (chain.monotone h).right).trans
+            apply le_trans _ (le_ωSup _ m)
+            apply le_refl
+          | inr h =>
+            apply (f.monotone (chain.monotone h).left _).trans
+            apply le_trans _ (le_ωSup _ n)
+            apply le_refl
+        · apply le_trans _ (le_ωSup _ n)
+          apply le_trans _ (le_ωSup _ n)
+          apply le_refl
+
+@[simps! apply symm_apply]
+def curry : (α × β →𝒄 γ) ≃o (α →𝒄 β →𝒄 γ) where
+  toFun := curry.hom
+  invFun := curry.inv
+
+  left_inv _ := rfl
+  right_inv _ := rfl
+  map_rel_iff' {f g} := by
+    constructor
+    <;> intro h
+    · intro ⟨x, y⟩
+      exact h x y
+    · intro x y
+      exact h (x, y)
+
+end OmegaCompletePartialOrder.ContinuousHom.Prod
+
+
+@[to_additive existing OmegaCompletePartialOrder.Cat]
+def OmegaCompletePartialOrder.Cat : Type (u+1) :=
+  CategoryTheory.Bundled OmegaCompletePartialOrder
+
+#check DFunLike.coe
+
+namespace OmegaCompletePartialOrder.Cat
+variable {α: Type u} [OmegaCompletePartialOrder α]
+variable {β: Type v} [OmegaCompletePartialOrder β]
+variable {γ: Type w} [OmegaCompletePartialOrder γ]
+
+
+open CategoryTheory
+
+#print BundledHom
+
+instance bundledHom : BundledHom @ContinuousHom where
+  toFun {α β} X Y f := f
+  id := @ContinuousHom.id
+  comp := @ContinuousHom.comp
+
+deriving instance LargeCategory for OmegaCompletePartialOrder.Cat
+
+instance concreteCategory : ConcreteCategory Cat :=
+  inferInstanceAs <| ConcreteCategory (Bundled OmegaCompletePartialOrder)
+
+instance : CoeSort Cat Type* where
+  coe X := X.α
+
+instance omegaCompletePartialOrderUnbundled (X : Cat) : OmegaCompletePartialOrder X :=
+  X.str
+
+instance instFunLike (X Y : Cat) : FunLike (X ⟶  Y) X Y :=
+  inferInstanceAs <| FunLike (X →𝒄 Y) X Y
+
+instance omegaCompletePartialOrder_coe (X : Cat) : OmegaCompletePartialOrder X :=
+  X.str
+
+@[instance] abbrev omegaCompletePartialOrder_forget
+    (X : Cat) : OmegaCompletePartialOrder <| (forget Cat).obj X :=
+  X.str
+
+theorem id_app (X : Cat.{u}) (x : ↑X) : (𝟙 X : X ⟶ X) x = x := rfl
+
+theorem comp_app {X Y Z : Cat.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (x : X) :
+    (f ≫ g : X → Z) x = g (f x) := rfl
+
+@[simp] theorem coe_id (X : Cat.{u}) : (𝟙 X : X → X) = id := rfl
+
+@[simp] theorem coe_comp {X Y Z : Cat.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) :
+    (f ≫ g : X → Z) = g ∘ f := rfl
+
+@[simp]
+lemma hom_inv_id_apply {X Y : Cat} (f : X ≅ Y) (x : X) : f.inv (f.hom x) = x :=
+  DFunLike.congr_fun f.hom_inv_id x
+
+@[simp]
+lemma inv_hom_id_apply {X Y : Cat} (f : X ≅ Y) (y : Y) : f.hom (f.inv y) = y :=
+  DFunLike.congr_fun f.inv_hom_id y
+
+def of (X : Type u) [OmegaCompletePartialOrder X] : Cat :=
+  ⟨X, inferInstance⟩
+
+@[simp]
+theorem coe_of (X : Type u) [OmegaCompletePartialOrder X] : (of X : Type u) = X := rfl
+
+@[simp] theorem coe_of_of {X Y : Type u} [OmegaCompletePartialOrder X] [OmegaCompletePartialOrder Y]
+    {f : X →𝒄 Y} {x} :
+    @DFunLike.coe (Cat.of X ⟶  Cat.of Y) ((CategoryTheory.forget Cat).obj (Cat.of X))
+      (fun _ ↦ (CategoryTheory.forget Cat).obj (Cat.of Y)) ConcreteCategory.instFunLike
+      f x =
+    @DFunLike.coe (X →𝒄 Y) X
+      (fun _ ↦ Y) _
+      f x :=
+  rfl
+
+instance : OmegaCompletePartialOrder Empty where
+  le x y := x = y
+  le_refl x := rfl
+  le_trans x y z h₁ h₂ := Trans.trans h₁ h₂
+  le_antisymm x := x.elim
+  ωSup c := (c 0).elim
+  le_ωSup c n := (c n).elim
+  ωSup_le c := (c 0).elim
+
+instance inhabited : Inhabited Cat :=
+  ⟨Cat.of Empty⟩
+
+lemma hom_apply {X Y : Cat} (f : X ⟶  Y) (x : X) : f x = (f : X →𝒄 Y) x := rfl
+
+instance : OmegaCompletePartialOrder Unit where
+  ωSup _ := .unit
+  le_ωSup _ _ := le_refl _
+  ωSup_le _ _ _ := le_refl _
+
+
+@[simps! apply]
+def whiskerLeft (X: Cat) {Y Z: Cat} (f: Y ⟶  Z) : of (X × Y) ⟶  of (X × Z) where
+  toFun := λ (x, y) => (x, f y)
+  monotone' := by
+    intro ⟨a, b⟩ ⟨c, d⟩ h₁
+    rw [Prod.mk_le_mk] at h₁
+    rw [Prod.mk_le_mk]
+    constructor
+    · exact h₁.left
+    · apply f.monotone
+      exact h₁.right
+  cont := by
+    intro c
+    simp only [coe_of, OrderHom.coe_mk, Prod.instOmegaCompletePartialOrder_ωSup_fst,
+      Prod.instOmegaCompletePartialOrder_ωSup_snd]
+    rw [f.continuous (c.map OrderHom.snd)]
     rfl
 
---def aux (f: α →𝒄 β →𝒄 γ) (c₁:Chain α) (c₂: Chain β) :
-  --ωSup ()
+@[simps! apply]
+def whiskerRight {X Y: Cat} (f: X ⟶  Y) (Z: Cat) : of (X × Z) ⟶  of (Y × Z) where
+  toFun := (λ (x, y) => (f x, y))
+  monotone' := by
+    intro ⟨a, b⟩ ⟨c, d⟩ h₁
+    rw [Prod.mk_le_mk] at h₁
+    rw [Prod.mk_le_mk]
+    constructor
+    · apply f.monotone
+      exact h₁.left
+    · exact h₁.right
+  cont := by
+    intro c
+    simp only [coe_of, OrderHom.coe_mk, Prod.instOmegaCompletePartialOrder_ωSup_snd,
+      Prod.instOmegaCompletePartialOrder_ωSup_fst]
+    rw [f.continuous (c.map OrderHom.fst)]
+    rfl
 
---def uncurry : (α →𝒄 β →𝒄 γ) →𝒄 α × β →𝒄 γ where
---  toFun foo :=
---    { toFun := λ p => foo p.fst p.snd
---    , monotone' := by
---        intro ⟨x, y⟩ ⟨z, t⟩ ⟨h₁, h₂⟩
---        apply ((foo x).monotone' h₂).trans
---        apply foo.monotone'
---        assumption
---    , cont := by
---        intro _ chain
---        simp only
---        calc
---          _ = foo (ωSup (chain.map OrderHom.fst)) (ωSup (chain.map OrderHom.snd)) := by rfl
---          _ = ωSup ((chain.map OrderHom.snd).map <| foo (ωSup (chain.map OrderHom.fst))) := by
---            rw [(foo _).cont]
---          _ = ωSup ((chain.map OrderHom.snd).map <| ωSup ((chain.map OrderHom.fst).map (toMono.comp foo))) := by
---            rw [foo.cont]; rfl
---          --_ = ωSup ((chain.map OrderHom.fst).map (toMono.comp foo)) (ωSup (chain.map OrderHom.snd)):= by
---          --  rw [foo.cont]
---          --  rfl
---          _ = _ := by
---            simp [ωSup, Prod.ωSup, OmegaCompletePartialOrder.ωSup, Chain.map,OrderHom.comp, Function.comp]
---            --apply le_antisymm <;> apply ωSup_le
---            sorry
---
---
---    }
---  monotone' := by
---    intro x y h ⟨x, y⟩
---    apply h
---  cont _ := rfl
-end OmegaCompletePartialOrder.ContinuousHom.Prod
+@[simps! apply]
+def tensorHom {X₁ Y₁ X₂ Y₂: Cat} (f: X₁ ⟶  Y₁) (g: X₂ ⟶  Y₂) : of (X₁ × X₂) ⟶  of (Y₁ × Y₂) where
+  toFun := λ (x, y) => (f x, g y)
+  monotone' := by
+    intro ⟨a, b⟩ ⟨c, d⟩ h₁
+    rw [Prod.mk_le_mk] at h₁
+    rw [Prod.mk_le_mk]
+    constructor
+    · apply f.monotone
+      exact h₁.left
+    · apply g.monotone
+      exact h₁.right
+  cont := by
+    intro c
+    simp only [coe_of, OrderHom.coe_mk, Prod.instOmegaCompletePartialOrder_ωSup_snd,
+      Prod.instOmegaCompletePartialOrder_ωSup_fst]
+    rw [f.continuous (c.map OrderHom.fst)]
+    rw [g.continuous (c.map OrderHom.snd)]
+    rfl
+
+@[simps! apply]
+def associator.hom (X Y Z: Cat) : (X × Y) × Z →𝒄 X × Y × Z where
+  toFun := (λ ((x, y), z) => (x, (y, z)))
+  monotone' := by
+    intro ((x, y), z) ((x', y'), z') ⟨⟨h₁, h₂⟩, h₃⟩
+    exact ⟨h₁, h₂, h₃⟩
+  cont := by
+    intro c
+    rfl
+
+@[simps! apply]
+def associator.inv (X Y Z: Cat) : X × Y × Z →𝒄 (X × Y) × Z where
+  toFun := (λ (x, (y, z)) => ((x, y), z))
+  monotone' := by
+    intro ⟨x, y, z⟩ ⟨x', y', z'⟩ ⟨h₁, h₂, h₃⟩
+    exact ⟨⟨h₁, h₂⟩, h₃⟩
+  cont := by
+    intro c
+    rfl
+
+@[simps! hom inv]
+def associator (X Y Z: Cat) :
+  of ((X × Y) × Z) ≅ of (X × Y × Z) where
+  hom := associator.hom X Y Z
+  inv := associator.inv X Y Z
+  hom_inv_id := rfl
+  inv_hom_id := rfl
+
+@[simps! apply]
+def leftUnitor.hom (X: Cat) : Unit × X →𝒄 X where
+  toFun := (λ (_, x) => x)
+  monotone' := by
+    intro (_, x) (_, y) ⟨_, h⟩
+    exact h
+  cont := by
+    intro c
+    rfl
+
+@[simps! apply]
+def leftUnitor.inv (X: Cat) : X →𝒄 Unit × X where
+  toFun := (λ x => ((), x))
+  monotone' := by
+    intro x y h
+    exact ⟨le_refl (), h⟩
+  cont := by
+    intro c
+    rfl
+
+@[simps! hom inv]
+def leftUnitor (X: Cat) :
+  of (of Unit × X) ≅ X where
+  hom := leftUnitor.hom X
+  inv := leftUnitor.inv X
+
+  inv_hom_id := rfl
+  hom_inv_id := rfl
+
+@[simps! apply]
+def rightUnitor.hom (X: Cat) : X × Unit →𝒄 X where
+  toFun := (λ (x, _) => x)
+  monotone' := by
+    intro (x, _) (y, _) ⟨h, _⟩
+    exact h
+  cont := by
+    intro c
+    rfl
+
+
+@[simps! apply]
+def rightUnitor.inv (X: Cat) : X →𝒄 X × Unit where
+  toFun := (λ x => (x, ()))
+  monotone' := by
+    intro x y h
+    exact ⟨h, le_refl ()⟩
+  cont := by
+    intro c
+    rfl
+
+@[simps! inv hom]
+def rightUnitor (X: Cat) :
+  of (X × of Unit) ≅ X where
+  hom := rightUnitor.hom X
+  inv := rightUnitor.inv X
+
+  inv_hom_id := rfl
+  hom_inv_id := rfl
+
+-- prof that the category of ω-CPO is monoidal
+instance : MonoidalCategory Cat where
+  tensorObj X Y := Cat.of <| X × Y
+
+  whiskerLeft := whiskerLeft
+
+  whiskerRight := whiskerRight
+
+  tensorHom := tensorHom
+
+  tensorUnit := Cat.of Unit
+
+  associator := associator
+
+  leftUnitor := leftUnitor
+
+  rightUnitor := rightUnitor
+
+  tensorHom_def _ _ := rfl
+
+  tensor_id _ _ := rfl
+
+  tensor_comp _ _ _ _ := rfl
+
+  whiskerLeft_id _ _ := rfl
+
+  id_whiskerRight _ _ := rfl
+
+  associator_naturality _ _ _ := rfl
+
+  leftUnitor_naturality _ := rfl
+
+  rightUnitor_naturality _ := rfl
+
+  pentagon _ _ _ _ := rfl
+
+  triangle _ _ := rfl
+
+
+--instance hasFiniteProducts : Limits.HasFiniteProducts Cat.{u} where
+--  out n := ⟨λ F => ⟨⟨⟨⟨_, _⟩, _⟩⟩⟩⟩
+end OmegaCompletePartialOrder.Cat

@@ -1,0 +1,39 @@
+{"log":
+ [{"message":
+   ".> LEAN_PATH=././.lake/packages/batteries/.lake/build/lib:././.lake/packages/Qq/.lake/build/lib:././.lake/packages/aesop/.lake/build/lib:././.lake/packages/proofwidgets/.lake/build/lib:././.lake/packages/Cli/.lake/build/lib:././.lake/packages/importGraph/.lake/build/lib:././.lake/packages/mathlib/.lake/build/lib:././.lake/build/lib LD_LIBRARY_PATH=././.lake/packages/batteries/.lake/build/lib:././.lake/packages/Qq/.lake/build/lib:././.lake/packages/aesop/.lake/build/lib:././.lake/packages/proofwidgets/.lake/build/lib:././.lake/packages/Cli/.lake/build/lib:././.lake/packages/importGraph/.lake/build/lib:././.lake/packages/mathlib/.lake/build/lib:././.lake/build/lib:/home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/lib/lean:/home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/lib /home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/bin/lean ././././CoInd/M.lean -R ./././. -o ././.lake/build/lib/CoInd/M.olean -i ././.lake/build/lib/CoInd/M.ilean -c ././.lake/build/ir/CoInd/M.c --json",
+   "level": "trace"},
+  {"message": "././././CoInd/M.lean:15:0: Approx : Container → Nat → Type u_1",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:60:0: Eq.mp.{u} {α β : Sort u} (h : α = β) (a : α) : β",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:61:0: cast_heq.{u} {α β : Sort u} (h : α = β) (a : α) : HEq (cast h a) a",
+   "level": "info"},
+  {"message": "././././CoInd/M.lean:116:0: Container.{u₁} : Type (u₁ + 1)",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:121:0: cast_heq.{u} {α β : Sort u} (h : α = β) (a : α) : HEq (cast h a) a",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:141:0: congrArg.{u, v} {α : Sort u} {β : Sort v} {a₁ a₂ : α} (f : α → β) (h : a₁ = a₂) : f a₁ = f a₂",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:142:0: Sigma.mk.{u, v} {α : Type u} {β : α → Type v} (fst : α) (snd : β fst) : Sigma β",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:242:0: Container.M.{u₁} (C : Container) : Type u₁",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:243:0: Container.M.corec.{u₁, u₃} {C : Container} {α : Type u₃} (f : α → C.Obj α) (x₀ : α) : C.M",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:244:0: Container.M.destruct.{u₁} {C : Container} (m : C.M) : C.Obj C.M",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:245:0: Container.M.destruct_corec.{u₁, u₃} {C : Container} {α : Type u₃} (f : α → C.Obj α) (x₀ : α) :\n  (M.corec f x₀).destruct = Map (M.corec f) (f x₀)",
+   "level": "info"},
+  {"message":
+   "././././CoInd/M.lean:246:0: Container.M.bisim.{u₁} {C : Container} (R : C.M → C.M → Prop)\n  (h₀ :\n    ∀ (x y : C.M),\n      R x y → ∃ node k₁ k₂, x.destruct = ⟨node, k₁⟩ ∧ y.destruct = ⟨node, k₂⟩ ∧ ∀ (i : C.B node), R (k₁ i) (k₂ i))\n  (x y : C.M) : R x y → x = y",
+   "level": "info"}],
+ "depHash": "17738880712785591712"}

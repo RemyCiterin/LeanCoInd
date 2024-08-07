@@ -1,0 +1,38 @@
+{"log":
+ [{"message":
+   ".> LEAN_PATH=././.lake/packages/batteries/.lake/build/lib:././.lake/packages/Qq/.lake/build/lib:././.lake/packages/aesop/.lake/build/lib:././.lake/packages/proofwidgets/.lake/build/lib:././.lake/packages/Cli/.lake/build/lib:././.lake/packages/importGraph/.lake/build/lib:././.lake/packages/mathlib/.lake/build/lib:././.lake/build/lib LD_LIBRARY_PATH=././.lake/packages/batteries/.lake/build/lib:././.lake/packages/Qq/.lake/build/lib:././.lake/packages/aesop/.lake/build/lib:././.lake/packages/proofwidgets/.lake/build/lib:././.lake/packages/Cli/.lake/build/lib:././.lake/packages/importGraph/.lake/build/lib:././.lake/packages/mathlib/.lake/build/lib:././.lake/build/lib:/home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/lib/lean:/home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/lib /home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/bin/lean ././././CoInd/Paco.lean -R ./././. -o ././.lake/build/lib/CoInd/Paco.olean -i ././.lake/build/lib/CoInd/Paco.ilean -c ././.lake/build/ir/CoInd/Paco.c --json",
+   "level": "trace"},
+  {"message":
+   "././././CoInd/Paco.lean:6:0: CompleteLattice.{u_9} (α : Type u_9) : Type u_9",
+   "level": "info"},
+  {"message": "././././CoInd/Paco.lean:7:0: Lattice.{u} (α : Type u) : Type u",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:8:0: OrderHom.lfp.{u} {α : Type u} [CompleteLattice α] : (α →o α) →o α",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:16:0: class SupSet.{u_1} : Type u_1 → Type u_1\nnumber of parameters: 1\nconstructor:\nSupSet.mk : {α : Type u_1} → (Set α → α) → SupSet α\nfields:\nsSup : Set α → α",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:18:0: def Set.{u} : Type u → Type u :=\nfun α => α → Prop",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:19:0: class CompleteLattice.{u_9} : Type u_9 → Type u_9\nnumber of parameters: 1\nconstructor:\nCompleteLattice.mk : {α : Type u_9} →\n  [toLattice : Lattice α] →\n    [toSupSet : SupSet α] →\n      (∀ (s : Set α), ∀ a ∈ s, a ≤ sSup s) →\n        (∀ (s : Set α) (a : α), (∀ b ∈ s, b ≤ a) → sSup s ≤ a) →\n          [toInfSet : InfSet α] →\n            (∀ (s : Set α), ∀ a ∈ s, sInf s ≤ a) →\n              (∀ (s : Set α) (a : α), (∀ b ∈ s, a ≤ b) → a ≤ sInf s) →\n                [toTop : Top α] → [toBot : Bot α] → (∀ (x : α), x ≤ ⊤) → (∀ (x : α), ⊥ ≤ x) → CompleteLattice α\nfields:\ntoLattice : Lattice α\ntoSupSet : SupSet α\nle_sSup : ∀ (s : Set α), ∀ a ∈ s, a ≤ sSup s\nsSup_le : ∀ (s : Set α) (a : α), (∀ b ∈ s, b ≤ a) → sSup s ≤ a\ntoInfSet : InfSet α\nsInf_le : ∀ (s : Set α), ∀ a ∈ s, sInf s ≤ a\nle_sInf : ∀ (s : Set α) (a : α), (∀ b ∈ s, a ≤ b) → a ≤ sInf s\ntoTop : Top α\ntoBot : Bot α\nle_top : ∀ (x : α), x ≤ ⊤\nbot_le : ∀ (x : α), ⊥ ≤ x",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:20:0: def SupSet.sSup.{u_1} : {α : Type u_1} → [self : SupSet α] → Set α → α :=\nfun α [self : SupSet α] => self.1",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:21:0: class Lattice.{u} : Type u → Type u\nnumber of parameters: 1\nconstructor:\nLattice.mk : {α : Type u} →\n  [toSemilatticeSup : SemilatticeSup α] →\n    [toInf : Inf α] →\n      (∀ (a b : α), a ⊓ b ≤ a) → (∀ (a b : α), a ⊓ b ≤ b) → (∀ (a b c : α), a ≤ b → a ≤ c → a ≤ b ⊓ c) → Lattice α\nfields:\ntoSemilatticeSup : SemilatticeSup α\ntoInf : Inf α\ninf_le_left : ∀ (a b : α), a ⊓ b ≤ a\ninf_le_right : ∀ (a b : α), a ⊓ b ≤ b\nle_inf : ∀ (a b c : α), a ≤ b → a ≤ c → a ≤ b ⊓ c",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:22:0: class Preorder.{u} : Type u → Type u\nnumber of parameters: 1\nconstructor:\nPreorder.mk : {α : Type u} →\n  [toLE : LE α] →\n    [toLT : LT α] →\n      (∀ (a : α), a ≤ a) →\n        (∀ (a b c : α), a ≤ b → b ≤ c → a ≤ c) → autoParam (∀ (a b : α), a < b ↔ a ≤ b ∧ ¬b ≤ a) _auto✝ → Preorder α\nfields:\ntoLE : LE α\ntoLT : LT α\nle_refl : ∀ (a : α), a ≤ a\nle_trans : ∀ (a b c : α), a ≤ b → b ≤ c → a ≤ c\nlt_iff_le_not_le : ∀ (a b : α), a < b ↔ a ≤ b ∧ ¬b ≤ a",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:278:0: Lean.Meta.matchEq? (e : Expr) : MetaM (Option (Expr × Expr × Expr))",
+   "level": "info"},
+  {"message":
+   "././././CoInd/Paco.lean:327:0: Lean.MVarId.generalize (mvarId : MVarId) (args : Array GeneralizeArg)\n  (transparency : TransparencyMode := TransparencyMode.instances) : MetaM (Array FVarId × MVarId)",
+   "level": "info"},
+  {"message": "././././CoInd/Paco.lean:380:0: 42 : ℕ", "level": "info"}],
+ "depHash": "10564288307179057577"}
