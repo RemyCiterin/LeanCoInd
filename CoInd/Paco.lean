@@ -7,25 +7,24 @@ import Lean
 #check Lattice
 #check OrderHom.lfp
 
-#check inferInstanceAs <| CompleteDistribLattice (∀ x:Nat, Nat → Prop)
-#check inferInstanceAs <| CompleteBooleanAlgebra (∀ x:Nat, {y: Nat // y == x} → Prop)
-
 universe u v w
 
 section
 
 variable {L:Type u} [CompleteLattice L] (f: L →o L)
 
+#print SupSet
+
 #print Set
 #print CompleteLattice
-#print SupSet.supₛ
+#print SupSet.sSup
 #print Lattice
 #print Preorder
 
 -- A type class for `indexed scott continuity` with natural numbers as index
 class ScottContinuousNat (foo: L →o L) where
   scottContinuousNat : ∀ (S: Nat → L),
-    (⨅ i, foo (S i)) ≤ foo (infᵢ S)
+    (⨅ i, foo (S i)) ≤ foo (iInf S)
 
 
 -- generate an approximation of size `n` of the greatest fixed point of `f`
@@ -45,11 +44,11 @@ def gfp.scott : L := ⨅ i, approx f i ⊤
 def gfp.scott.tarski [ScottContinuousNat f] :
   ∀ p, p ≤ f p → p ≤ scott f := by
   intro p h₁
-  simp only [scott, le_infᵢ_iff]
+  simp only [scott, le_iInf_iff]
   intro i
   induction i with
   | zero =>
-    simp only [approx, le_top]
+    exact le_top
   | succ n h₂ =>
     apply le_trans h₁
     apply f.monotone'
@@ -59,10 +58,10 @@ def gfp.scott.scott_f_leq_f_scott_f [inst: ScottContinuousNat f] :
   scott f ≤ f (scott f) := by
   have h₁ := @ScottContinuousNat.scottContinuousNat L _ f inst
   simp only [scott]
-  simp [infᵢ_le_iff]
+  simp [iInf_le_iff]
   conv at h₁ =>
     intro S
-    rw [infᵢ_le_iff]
+    rw [iInf_le_iff]
     rfl
   intro a h₂
   have h₃ := λ i => h₂ (.succ i)
@@ -99,8 +98,8 @@ def pgfp.union  (p: L) : L →o L where
       intro a b leq
       apply f.monotone'
       apply sup_le
-      . simp
-      . apply le_sup_of_le_right
+      · simp
+      · apply le_sup_of_le_right
         assumption
 
 -- if L is a `CompleteDistribLattice`, then `pgfp.union f p` is Scott continuous if `f` is Scott continuous
@@ -110,12 +109,11 @@ instance {L:Type u} [CompleteDistribLattice L] {f: L →o L} {p: L} [inst: Scott
     intro S
 
 
-    have h₂ : (⨅ i, p ⊔ S i) ≤ p ⊔ infᵢ S := by
-      have := sup_infᵢ_eq p S
+    have h₂ : (⨅ i, p ⊔ S i) ≤ p ⊔ iInf S := by
+      have := sup_iInf_eq p S
       rw [←this]
-      simp only [ge_iff_le, le_infᵢ_iff, le_refl]
 
-    rw [infᵢ_le_iff]
+    rw [iInf_le_iff]
     intro x h₁
     simp [pgfp.union] at *
 
@@ -123,7 +121,7 @@ instance {L:Type u} [CompleteDistribLattice L] {f: L →o L} {p: L} [inst: Scott
     apply LE.le.trans _ h₃
     have h₄ := @ScottContinuousNat.scottContinuousNat L _ f inst (λ i => p ⊔ S i)
     apply LE.le.trans _  h₄
-    rw [le_infᵢ_iff]
+    rw [le_iInf_iff]
     exact h₁
 
 def pgfp : L →o L where
@@ -137,9 +135,9 @@ def pgfp : L →o L where
       intro q
       apply f.monotone'
       apply sup_le
-      . apply le_sup_of_le_left
+      · apply le_sup_of_le_left
         assumption
-      . simp
+      · simp
 
 def pgfp.approx (p: L) (n: Nat) : L →o L := gfp.approx (pgfp.union f p) n
 
@@ -158,20 +156,20 @@ def pgfp.accumulate (p q:L) :
 by
   simp only [pgfp, ge_iff_le]
   constructor <;> intro h
-  . have : union f p ≤ union f (p ⊔ q) := by
+  · have : union f p ≤ union f (p ⊔ q) := by
       simp only [union, ge_iff_le, mk_le_mk]
       intro x
       apply f.monotone'
       apply sup_le
-      . apply le_sup_of_le_left
+      · apply le_sup_of_le_left
         simp
-      . apply le_sup_of_le_right
+      · apply le_sup_of_le_right
         simp
     have := gfp.monotone' this
     apply le_trans _ this
     assumption
 
-  . apply le_trans h
+  · apply le_trans h
     have : gfp (union f (p ⊔ q)) ≤ f (p ⊔ gfp (union f (p ⊔ q))) := by
       conv =>
         lhs
@@ -179,14 +177,13 @@ by
         lhs
         simp only [union]
         rfl
-      simp only
       apply f.monotone'
       apply sup_le
-      . apply sup_le
-        . simp
-        . apply le_trans h
+      · apply sup_le
+        · simp
+        · apply le_trans h
           simp
-      . simp
+      · simp
     apply le_gfp
     assumption
 
@@ -214,10 +211,11 @@ def pgfp.scott.rewrite {L: Type u} [CompleteDistribLattice L] (f: L →o L) [Sco
   : pgfp f = pgfp.scott f := by
   conv =>
     rhs
-    simp [scott]
+    unfold scott
     intro p
-    simp only [←gfp.scott.rewrite (pgfp.union f p)]
+    rw [←gfp.scott.rewrite (pgfp.union f p)]
     rfl
+  rfl
 
 end
 

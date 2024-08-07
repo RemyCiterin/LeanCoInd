@@ -2,7 +2,8 @@ import Qq
 import Lean
 import Std
 import CoInd.Attr
-import Mathlib.Tactic.SolveByElim
+import Lean.Elab.Tactic.SolveByElim
+import Batteries
 
 universe u v w
 
@@ -166,11 +167,11 @@ syntax (name := refinment_type) "refinment_type" : tactic
 elab_rules : tactic
 | `(tactic| refinment_type ) => do
   let cfg ← elabApplyRulesConfig <| mkNullNode #[]
-  let cfg := { cfg.noBackTracking with
+  let cfg := { cfg with
     transparency := .reducible
-    failAtMaxDepth := false
+    backtracking := false
     exfalso := false }
-  liftMetaTactic fun g => do solveByElim.processSyntax cfg false false [] [] #[mkIdent `refinment_type] [g]
+  liftMetaTactic fun g => do processSyntax cfg false false [] [] #[mkIdent `refinment_type] [g]
 
 
 end Mathlib.Tactic.OmegaCompletePartialOrder.Admissible

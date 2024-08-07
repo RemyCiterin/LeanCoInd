@@ -46,8 +46,8 @@ def WellFormedF (C:IContainer'.{u₀} I) :
   monotone' := by
     intro p₁ p₂ h₀ i x ⟨h₁, h₂⟩
     constructor
-    . assumption
-    . intro y
+    · assumption
+    · intro y
       apply h₀
       apply h₂
 
@@ -111,10 +111,10 @@ by
   intro i x ⟨y, h₀⟩
   cases h₀
   constructor
-  . simp only [Container.M.destruct_corec, Container.Map, automaton]
+  · simp only [Container.M.destruct_corec, Container.Map, automaton]
     have := (f i y).1.2
     rw [←this]
-  . intro z
+  · intro z
     apply Or.inl
     exists (f _ y).snd _
 
@@ -132,7 +132,7 @@ by
 def M.lift_destruct_eq (i: I) (x : C.toContainer.M) (wf: WellFormed i x) (y: C.Obj C.M i) :
   destruct ⟨x, wf⟩ = y → x.destruct = ⟨y.1.1, λ x => (y.2 x).1⟩ := by
   intro h
-  aesop_subst h
+  subst h
   rfl
 
 
@@ -149,7 +149,7 @@ by
     induction h
     rfl
   apply Container.M.bisim (λ x y => ∃ i, ∃ (wfx: WellFormed i x) (wfy:WellFormed i y), R i ⟨x, wfx⟩ ⟨y, wfy⟩)
-  . intro x y ⟨i, wfx, wfy, r⟩
+  · intro x y ⟨i, wfx, wfy, r⟩
     have ⟨⟨node, h₄⟩, k₁, k₂, h₁, h₂, h₃⟩ := h₀ i ⟨x, wfx⟩ ⟨y, wfy⟩ r
     have h₁ := lift_destruct_eq _ _ _ _ h₁
     have h₂ := lift_destruct_eq _ _ _ _ h₂

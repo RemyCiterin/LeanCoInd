@@ -1,4 +1,4 @@
-import Mathlib.Tactic.LabelAttr
+import Lean.LabelAttribute
 
 
 
@@ -8,7 +8,7 @@ namespace Attr
 
 syntax (name := refinment_type) "refinment_type" : attr
 
-open LabelAttr in
+open Lean in
 
 initialize ext : LabelExtension ← (
   let descr := "A lemma proving the typing of an element of an ω-CPO by an admissible property"

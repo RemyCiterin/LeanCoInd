@@ -1,7 +1,22 @@
 import Mathlib.Order.OmegaCompletePartialOrder
+--import Mathlib.CategoryTheory.Closed.Cartesian
+import Mathlib.Tactic.Linarith
 import CoInd.Tactic
 
 open OmegaCompletePartialOrder
+
+--instance {α: Type u} {β: Type v} [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β]
+--  : FunLike (α →𝒄 β) α β where
+--  coe f := f.toOrderHom
+--  coe_injective' := by
+--    intro f g h₁
+--    cases f with
+--    | mk f' _ =>
+--    cases g with
+--    | mk g' _ =>
+--    cases f'
+--    cases g'
+--    congr
 
 -- define projections, map and lift operations over Pi types
 namespace Pi
@@ -10,21 +25,22 @@ variable {α: Type u₁} {α': Type u₂}
 variable {β: α → Type u₃} [(a : α) → OmegaCompletePartialOrder (β a)]
 variable {γ: α → Type u₄} [(a : α) → OmegaCompletePartialOrder (γ a)]
 
+
 @[simps! apply]
 def OmegaCompletePartialOrder.proj (a: α) : ((a: α) → β a) →𝒄 (β a) where
   toFun p := p a
   monotone' := λ _ _ h₁ => h₁ a
   cont _ := rfl
 
+
 @[simps! apply]
 def OmegaCompletePartialOrder.map (f:(a: α) → β a →𝒄 γ a) : (∀ a, β a) →𝒄 (∀ a, γ a) where
   toFun p a := f a (p a)
   monotone' := λ x y h₁ a => (f a).monotone' (h₁ a)
   cont := by
-    intro h c
+    intro c
     funext a
     apply (f a).cont
-    apply (f a).monotone'
 
 @[simps! apply]
 def OmegaCompletePartialOrder.lift (f: α' → α) : (∀ a, β a) →𝒄 (∀ a, β (f a)) where
@@ -35,15 +51,15 @@ def OmegaCompletePartialOrder.lift (f: α' → α) : (∀ a, β a) →𝒄 (∀ 
 end Pi
 
 @[simp]
-def OmegaCompletePartialOrder.Fix.IterFun
+def OmegaCompletePartialOrder.OrderHom.fix.iterFun
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
   (f: α → α) : ℕ → α
-| n+1 => f (IterFun f n)
+| n+1 => f (iterFun f n)
 | 0 => ⊥
 
-def OmegaCompletePartialOrder.Fix.IterFun_le_succ
+def OmegaCompletePartialOrder.OrderHom.fix.iterFun_le_succ
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
-  (f: α →o α) (n: ℕ) : IterFun f n ≤ IterFun f (n+1) := by
+  (f: α →o α) (n: ℕ) : iterFun f n ≤ iterFun f (n+1) := by
   induction n with
   | zero =>
     apply bot_le
@@ -51,25 +67,25 @@ def OmegaCompletePartialOrder.Fix.IterFun_le_succ
     apply f.monotone'
     exact h₁
 
-def OmegaCompletePartialOrder.Fix.IterFun_mono
+def OmegaCompletePartialOrder.OrderHom.fix.iterFun_mono
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
-  (f: α →o α) : Monotone (IterFun f) := by
+  (f: α →o α) : Monotone (iterFun f) := by
   intro a b h₁
   induction h₁ with
   | refl =>
     apply le_refl
   | step _ h₂ =>
     apply h₂.trans
-    apply IterFun_le_succ
+    apply iterFun_le_succ
 
 instance {α: Type u} [Preorder α] : Preorder (Chain α) :=
   inferInstanceAs (Preorder (ℕ →o α))
 
 @[simps! coe]
-def OmegaCompletePartialOrder.Fix.Iter
+def OmegaCompletePartialOrder.OrderHom.fix.iter
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
   : (α →o α) →o (Chain α) where
-  toFun f := ⟨IterFun f, IterFun_mono f⟩
+  toFun f := ⟨iterFun f, iterFun_mono f⟩
   monotone' := by
     intro f g h₁ n
     induction n with
@@ -80,39 +96,10 @@ def OmegaCompletePartialOrder.Fix.Iter
       apply h₁
 
 
---def OmegaCompletePartialOrder.Fix.Iter.cont
---  {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
---  (f: Chain (α →𝒄 α)) (n: ℕ) : Iter (ωSup f).toOrderHom n =
---    ωSup ⟨λ m => Iter (f m) n, by sorry⟩ := by
---  induction n with
---  | zero =>
---    apply le_antisymm
---    . apply bot_le
---    . apply ωSup_le
---      intro n
---      apply bot_le
---  | succ n h₁ =>
---    simp [Chain.map, OrderHom.comp, Function.comp]
---    apply le_antisymm <;> apply ωSup_le <;> intro m
---    . simp only [Iter, ωSup] at h₁
---      --rw [h₁]
---      conv =>
---        lhs
---        lhs
---        lhs
---        intro x
---        rhs
---        rw [h₁]
---      simp only
---      sorry
---    . sorry
-
-
-
-def OmegaCompletePartialOrder.Fix
+def OmegaCompletePartialOrder.OrderHom.fix
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
   : (α →o α) →o α where
-  toFun f := ωSup (Fix.Iter f)
+  toFun f := ωSup (fix.iter f)
   monotone' := by
     intro f g h₁
     apply ωSup_le
@@ -122,14 +109,14 @@ def OmegaCompletePartialOrder.Fix
     | zero =>
       apply bot_le
     | succ n h =>
-      simp only [Fix.Iter, Fix.IterFun]
+      simp only [fix.iter, fix.iterFun]
       apply (f.monotone' h).trans
       apply h₁
 
-namespace OmegaCompletePartialOrder.Fix
+namespace OmegaCompletePartialOrder.OrderHom.fix
 variable {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
 
-def unfold_mono (f: α →o α) : Fix f ≤ f (Fix f) := by
+def unfold_mono (f: α →o α) : fix f ≤ f (fix f) := by
   apply ωSup_le
   intro n
   cases n with
@@ -137,29 +124,41 @@ def unfold_mono (f: α →o α) : Fix f ≤ f (Fix f) := by
     apply bot_le
   | succ n =>
     apply f.monotone'
-    apply le_ωSup (Iter f)
+    apply le_ωSup (iter f)
 
-def unfold_cont (f: α →𝒄 α) : Fix f = f (Fix f) := by
-  suffices Fix f = ωSup ((Iter f).map f.toOrderHom) by
+def unfold_cont (f: α →𝒄 α) : fix f = f (fix f) := by
+  suffices fix f = ωSup ((iter f).map f.toOrderHom) by
     conv =>
       lhs
       rw [this, ←f.cont]
       rfl
+    rfl
   apply le_antisymm
-  . apply ωSup_le
+  · apply ωSup_le
     intro n
     apply LE.le.trans _ (le_ωSup _ n)
     simp only [Chain.map_coe, Function.comp_apply]
-    apply (Iter f.toOrderHom).monotone' (show n ≤ n+1 by simp)
-  . apply ωSup_le
+    apply (iter f.toOrderHom).monotone' (show n ≤ n+1 by simp)
+  · apply ωSup_le
     intro n
-    apply le_ωSup (Iter f.toOrderHom) (n+1)
+    apply le_ωSup (iter f.toOrderHom) (n+1)
 
-end OmegaCompletePartialOrder.Fix
+def IsLUB (f: α →o α) (x: α) (hyp: f x = x) : fix f ≤ x := by
+  apply ωSup_le
+  intro n
+  induction n with
+  | zero =>
+    apply bot_le
+  | succ n h =>
+    rw [←hyp]
+    apply f.monotone'
+    assumption
 
-def OmegaCompletePartialOrder.Fix'
+end OmegaCompletePartialOrder.OrderHom.fix
+
+def OmegaCompletePartialOrder.OrderHom.fix'
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
-  : (α →𝒄 α) →o α := Fix.comp ContinuousHom.toMono
+  : (α →𝒄 α) →o α := fix.comp ContinuousHom.toMono
 
 #print Continuous
 
@@ -167,19 +166,20 @@ def OmegaCompletePartialOrder.Fix'
   Prove that the fixpoint operation over continuous functions is
   itself a continuous function
 -/
-theorem OmegaCompletePartialOrder.Fix_count
+theorem OmegaCompletePartialOrder.OrderHom.fix_count
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
-  (c: Chain (α →𝒄 α)) : Fix' (ωSup c) ≤ ωSup (c.map Fix') := by
+  (c: Chain (α →𝒄 α)) : fix' (ωSup c) ≤ ωSup (c.map fix') := by
   apply ωSup_le
   intro n
   induction n with
   | zero =>
     apply bot_le
   | succ n h₁ =>
-    simp only [Fix.Iter, Fix.IterFun]
+    simp only [fix.iter, fix.iterFun]
     apply ((ωSup c).monotone' h₁).trans
-    have : Continuous (ωSup c).toOrderHom := (ωSup c).cont
-    specialize this (c.map Fix')
+    have :
+      (ωSup c).toFun (ωSup (c.map fix')) = ωSup ((c.map fix').map (ωSup c).toOrderHom)
+      := (ωSup c).cont (c.map fix')
     rw [this]
     apply ωSup_le
     intro m
@@ -187,37 +187,41 @@ theorem OmegaCompletePartialOrder.Fix_count
     intro k
     cases Nat.le_or_le m k with
     | inl h =>
-      apply ((c k).monotone' (Fix'.monotone' (c.monotone' h))).trans
-      simp only [Fix', OrderHom.comp, Function.comp, ContinuousHom.toMono, ←Fix.unfold_cont]
-      apply le_ωSup (c.map Fix')
+      apply ((c k).monotone' (fix'.monotone' (c.monotone' h))).trans
+      calc
+        _ = (fix (c k : α →o α)) := by
+          rw [fix.unfold_cont (c k)]
+          rfl
+        _ ≤ _ := by
+          apply le_ωSup (c.map fix')
     | inr h =>
-      have h' := c.monotone' h (Fix' (c m))
-      apply h'.trans
-      simp only [Fix', OrderHom.comp, Function.comp, ContinuousHom.toMono, ←Fix.unfold_cont]
-      apply le_ωSup (c.map Fix') m
+      apply (c.monotone' h (fix' (c m))).trans
+      calc
+        _ = (fix (c m: α →o α)) := by
+          rw [fix.unfold_cont (c m)]
+          rfl
+        _ ≤ _ := by
+          apply le_ωSup (c.map fix') m
 
 /-
   A fixpoint operation over continuous function as a continuous function
 -/
 @[simps! apply]
-def OmegaCompletePartialOrder.FixCont
+def OmegaCompletePartialOrder.ContinuousHom.fix
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
   : (α →𝒄 α) →𝒄 α where
-  toFun f := Fix f
+  toFun f := OrderHom.fix f
   monotone' := by
     intro a b h
-    apply Fix.monotone' h
+    apply OrderHom.fix.monotone' h
   cont := by
-    intro mono c
-    simp at mono
-    simp only
-    suffices Fix' (ωSup c) = ωSup (c.map Fix') by
+    intro c
+    suffices OrderHom.fix' (ωSup c) = ωSup (c.map OrderHom.fix') by
       exact this
     apply le_antisymm
-    . apply Fix_count
-    . apply ωSup_le
+    · apply OrderHom.fix_count
+    · apply ωSup_le
       intro n
-      simp only [Fix', Fix, Chain.map_coe, Function.comp_apply]
       apply ωSup_le
       intro m
       apply le_trans _ (le_ωSup _ m)
@@ -225,21 +229,23 @@ def OmegaCompletePartialOrder.FixCont
       | zero =>
         apply bot_le
       | succ m h =>
-        simp only [Fix.Iter, Fix.IterFun]
         apply ((c n).monotone' h).trans
         apply le_ωSup c n
+
+#print ContinuousHom
 
 /-
   The unfold theorem for continuous fixed point
 -/
-def OmegaCompletePartialOrder.FixCont.unfold
+def OmegaCompletePartialOrder.ContinuousHom.fix.unfold
   {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
-  (f: α →𝒄 α) : FixCont f = f (FixCont f) :=
-  Fix.unfold_cont f
+  (f: α →𝒄 α) : fix f = f (fix f) :=
+  OrderHom.fix.unfold_cont f
 
 namespace OmegaCompletePartialOrder.Chain
 variable {α: Type u} [OmegaCompletePartialOrder α]
 
+@[simps! coe]
 def filter (c: Chain α) (U: ℕ →o ℕ) : Chain α := c.comp U
 
 -- ensure that an increasing seauence `c` filtred by `U` have a supremum less than
@@ -253,8 +259,8 @@ def ωSup_filter (c: Chain α) (U: ℕ →o ℕ) : ωSup (filter c U) ≤ ωSup 
 -- the supremum of `c` and `c.filter u` are equals
 def ωSup_filter_inj (c: Chain α) (U: ℕ →o ℕ) (inj: Function.Injective U) : ωSup (c.filter U) = ωSup c := by
   apply le_antisymm
-  . apply ωSup_filter
-  . apply ωSup_le
+  · apply ωSup_filter
+  · apply ωSup_le
     intro n
     have : ∀ n, n ≤ U n := by
       intro n
@@ -267,9 +273,9 @@ def ωSup_filter_inj (c: Chain α) (U: ℕ →o ℕ) (inj: Function.Injective U)
         have := @Nat.lt_iff_le_and_ne (U n) (U (.succ n))
         apply this.mpr
         constructor
-        . apply U.monotone
+        · apply U.monotone
           simp_arith
-        . intro h
+        · intro h
           specialize inj h
           cases inj
     apply le_trans _ (le_ωSup (filter c U) n)
@@ -292,7 +298,7 @@ attribute [coe] Admissible.toSet
 namespace OmegaCompletePartialOrder.Admissible
 variable {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
 
-instance instFunLike : FunLike (Admissible α) α (λ _ => Prop) where
+instance instFunLike : FunLike (Admissible α) α Prop where
   coe := toSet
   coe_injective' := by
     intro a b h₁
@@ -316,19 +322,19 @@ def And (lhs rhs: Admissible α) : Admissible α where
   admissible' := by
     intro c h₁
     constructor
-    . apply lhs.admissible'
+    · apply lhs.admissible'
       intro n
       specialize h₁ n
       exact h₁.left
-    . apply rhs.admissible'
+    · apply rhs.admissible'
       intro n
       specialize h₁ n
       exact h₁.right
 
   contain_bot := by
     constructor
-    . exact lhs.contain_bot
-    . exact rhs.contain_bot
+    · exact lhs.contain_bot
+    · exact rhs.contain_bot
 
 @[refinment_type] def And.intro (lhs rhs: Admissible α) (x: α) :
   x ∈ lhs → x ∈ rhs → x ∈ And lhs rhs := by
@@ -392,20 +398,27 @@ noncomputable def Or.sequence' (p: Admissible α) (c: Chain α) : ℕ →o ℕ w
       apply le_refl
     | step _ h₂ =>
       apply h₂.trans
-      simp_arith [sequence]
+      simp only [sequence]
+      linarith
+
+#print OrderHom.comp
+
+#check Classical.epsilon_spec
 
 def Or.sequence_spec (p: Admissible α) (c: Chain α) :
   (∀ n, ∃ m, p (c (n + m))) → ∀ n, p (c.filter (Or.sequence' p c) n) := by
   intro h₁ n
   cases n with
   | zero =>
-    simp [Chain.filter, sequence', sequence, prop]
-    apply @Classical.epsilon_spec _ (λ m => p (c m))
+    conv =>
+      rhs
+      rw [Chain.filter, OrderHom.comp, OrderHom.coe_mk, Function.comp_apply]
+      rw [sequence', OrderHom.coe_mk, sequence]
+      rw [←Nat.zero_add (Classical.epsilon (prop p c 0))]
+      unfold prop
+
+    apply @Classical.epsilon_spec _ (λ m => p (c (0 + m)))
     specialize h₁ 0
-    conv at h₁ =>
-      rhs; intro m
-      rw [Nat.zero_add]
-      rfl
     assumption
   | succ m =>
     simp [Chain.filter, sequence', sequence, prop]
@@ -414,9 +427,9 @@ def Or.sequence_spec (p: Admissible α) (c: Chain α) :
 
 def Or.pigeonhole (p q: Admissible α) (c: Chain α) (h₁: ∀ n, p (c n) ∨ q (c n)) :
   (∀ n, ∃ m, p (c (n+m))) ∨ (∀ n, ∃ m, q (c (n+m))) := by
-  by_cases (∀ n, ∃ m, p (c (n+m)))
-  . apply Or.inl h
-  . apply Or.inr
+  by_cases h:(∀ n, ∃ m, p (c (n+m)))
+  · apply Or.inl h
+  · apply Or.inr
     intro n
     conv at h =>
       rw [not_forall]
@@ -481,14 +494,17 @@ def Forall {β: Sort v} (p: β → Admissible α) : Admissible α where
 
 -- If a proposition `p` is admissible then if is enough to show that `p` is stable
 -- by `f` to show that `Fix f` ensure `p`
-@[refinment_type] def Fix_thm (p: Admissible α) (f: α →o α) (hyp: ∀ x, x ∈ p → f x ∈ p) : Fix f ∈ p := by
-  apply p.admissible' (Fix.Iter f)
+@[refinment_type] def Fix_thm (p: Admissible α) (f: α →o α) (IsInv: ∀ x, x ∈ p → f x ∈ p) : OrderHom.fix f ∈ p := by
+  apply p.admissible' (OrderHom.fix.iter f)
   intro n
   induction n with
   | zero =>
     apply p.contain_bot
   | succ n h₁ =>
-    exact hyp (Fix.Iter f n) h₁
+    exact IsInv (OrderHom.fix.iter f n) h₁
+
+@[refinment_type] def FixCont_thm (p: Admissible α) (f: α →𝒄 α) (IsInv: ∀ x, x ∈ p → f x ∈ p) : ContinuousHom.fix f ∈ p :=
+  Fix_thm p f IsInv
 
 -- prove that a "lustre node" verify a property if this property is inductive
 def NodeFix_thm {β: Type v}
@@ -496,10 +512,121 @@ def NodeFix_thm {β: Type v}
   (node_eqs: α →𝒄 β →𝒄 β)
   (p: Admissible α) (q: Admissible β)
   (IsInv: ∀ x y, x ∈ p → y ∈ q → node_eqs x y ∈ q)
-  (x: α) (h₁: x ∈ p) : FixCont.comp node_eqs x ∈ q := by
-  simp only [ContinuousHom.comp_apply, FixCont_apply]
+  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q := by
   apply Fix_thm
   intro y h₂
   apply IsInv <;> assumption
 
+#check ContinuousHom
+
 end OmegaCompletePartialOrder.Admissible
+
+
+
+namespace OmegaCompletePartialOrder.ContinuousHom.Prod
+variable {α: Type u} [OmegaCompletePartialOrder α]
+variable {β: Type v} [OmegaCompletePartialOrder β]
+variable {γ: Type w} [OmegaCompletePartialOrder γ]
+
+@[simps! apply]
+def fst : α × β →𝒄 α where
+  toFun p := p.fst
+  monotone' := OrderHom.fst.monotone'
+  cont := by
+    intro chain
+    rfl
+
+@[simps! apply]
+def snd : α × β →𝒄 β where
+  toFun p := p.snd
+  monotone' := OrderHom.snd.monotone'
+  cont := by
+    intro chain
+    rfl
+
+@[simps! apply]
+def prod (f: α →𝒄 β) (g: α →𝒄 γ) : α →𝒄 β × γ where
+  toFun x := (f x, g x)
+  monotone' := (OrderHom.prod f.toOrderHom g.toOrderHom).monotone'
+  cont := by
+    intro chain
+    rw [Prod.mk.injEq]
+    constructor
+    · apply f.cont
+    · apply g.cont
+
+#check Chain.zip
+#check OrderHom.const
+#check le_ωSup
+
+@[simps! apply]
+def curry : (α × β →𝒄 γ) →𝒄 α →𝒄 β →𝒄 γ where
+  toFun foo :=
+    { toFun := λ x => foo.comp (prod (const x) id)
+    , monotone' := by
+        intro a b h₁ x
+        apply foo.monotone'
+        constructor
+        · apply h₁
+        · apply le_refl
+    , cont := by
+        intro chain
+        apply ContinuousHom.ext
+        intro x
+        simp
+        calc
+          _ = foo (ωSup (Chain.zip chain (OrderHom.const _ x))) := by
+            apply congrArg
+            rw [Prod.mk.injEq]
+            constructor
+            · rfl
+            · apply le_antisymm
+              · apply le_ωSup (OrderHom.const ℕ x) 0
+              · apply ωSup_le
+                intro _
+                apply le_refl
+          _ = ωSup (Chain.map (Chain.zip chain (OrderHom.const _ x)) foo) := foo.cont _
+          _ = _ := rfl
+    }
+  monotone' := by
+    intro f₁ f₂ h₁ x y
+    exact h₁ _
+  cont := by
+    intro chain
+    rfl
+
+--def aux (f: α →𝒄 β →𝒄 γ) (c₁:Chain α) (c₂: Chain β) :
+  --ωSup ()
+
+--def uncurry : (α →𝒄 β →𝒄 γ) →𝒄 α × β →𝒄 γ where
+--  toFun foo :=
+--    { toFun := λ p => foo p.fst p.snd
+--    , monotone' := by
+--        intro ⟨x, y⟩ ⟨z, t⟩ ⟨h₁, h₂⟩
+--        apply ((foo x).monotone' h₂).trans
+--        apply foo.monotone'
+--        assumption
+--    , cont := by
+--        intro _ chain
+--        simp only
+--        calc
+--          _ = foo (ωSup (chain.map OrderHom.fst)) (ωSup (chain.map OrderHom.snd)) := by rfl
+--          _ = ωSup ((chain.map OrderHom.snd).map <| foo (ωSup (chain.map OrderHom.fst))) := by
+--            rw [(foo _).cont]
+--          _ = ωSup ((chain.map OrderHom.snd).map <| ωSup ((chain.map OrderHom.fst).map (toMono.comp foo))) := by
+--            rw [foo.cont]; rfl
+--          --_ = ωSup ((chain.map OrderHom.fst).map (toMono.comp foo)) (ωSup (chain.map OrderHom.snd)):= by
+--          --  rw [foo.cont]
+--          --  rfl
+--          _ = _ := by
+--            simp [ωSup, Prod.ωSup, OmegaCompletePartialOrder.ωSup, Chain.map,OrderHom.comp, Function.comp]
+--            --apply le_antisymm <;> apply ωSup_le
+--            sorry
+--
+--
+--    }
+--  monotone' := by
+--    intro x y h ⟨x, y⟩
+--    apply h
+--  cont _ := rfl
+end OmegaCompletePartialOrder.ContinuousHom.Prod

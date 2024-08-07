@@ -1,5 +1,7 @@
 import Lean.Meta.Eqns
-import Std.Lean.NameMapAttribute
+import Batteries.Lean.NameMapAttribute
+import Lean.Elab.Exception
+import Lean.Elab.InfoTree.Main
 
 /-! # The `@[eqns]` attribute
 This file provides the `eqns` attribute as a way of overriding the default equation lemmas. For
@@ -16,18 +18,21 @@ theorem transpose_const {m n} (c : ℕ) :
   rw [transpose]
 ```
 -/
-open Lean
+open Lean Elab
 
-syntax (name := eqns) "eqns" ident* : attr
+syntax (name := eqns) "eqns" (ppSpace ident)* : attr
 
 initialize eqnsAttribute : NameMapExtension (Array Name) ←
   registerNameMapAttribute {
     name  := `eqns
-    descr := "Overrides the equation lemmas for a declation to the provided list"
-    add   :=  fun
-    | _, `(attr| eqns $[$names]*) =>
-      pure <| names.map (fun n => n.getId)
-    | _, s => throw <| .error s "unsuported syntax!" }
+    descr := "Overrides the equation lemmas for a declaration to the provided list"
+    add   := fun
+    | declName, `(attr| eqns $[$names]*) => do
+      if let some _ := Meta.eqnsExt.getState (← getEnv) |>.map.find? declName then
+        throwError "There already exist stored eqns for '{declName}'; registering new equations \
+          will not have the desired effect."
+      names.mapM realizeGlobalConstNoOverloadWithInfo
+    | _, _ => Lean.Elab.throwUnsupportedSyntax }
 
 initialize Lean.Meta.registerGetEqnsFn (fun name => do
   pure (eqnsAttribute.find? (← getEnv) name))
