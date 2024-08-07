@@ -1,5 +1,0 @@
-{"log":
- [{"message":
-   ".> LEAN_PATH=././.lake/packages/batteries/.lake/build/lib:././.lake/packages/Qq/.lake/build/lib:././.lake/packages/aesop/.lake/build/lib:././.lake/packages/proofwidgets/.lake/build/lib:././.lake/packages/Cli/.lake/build/lib:././.lake/packages/importGraph/.lake/build/lib:././.lake/packages/mathlib/.lake/build/lib:././.lake/build/lib LD_LIBRARY_PATH=././.lake/packages/batteries/.lake/build/lib:././.lake/packages/Qq/.lake/build/lib:././.lake/packages/aesop/.lake/build/lib:././.lake/packages/proofwidgets/.lake/build/lib:././.lake/packages/Cli/.lake/build/lib:././.lake/packages/importGraph/.lake/build/lib:././.lake/packages/mathlib/.lake/build/lib:././.lake/build/lib:/home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/lib/lean:/home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/lib /home/remy/.elan/toolchains/leanprover--lean4---v4.11.0-rc1/bin/lean ././././CoInd/Eqns.lean -R ./././. -o ././.lake/build/lib/CoInd/Eqns.olean -i ././.lake/build/lib/CoInd/Eqns.ilean -c ././.lake/build/ir/CoInd/Eqns.c --json",
-   "level": "trace"}],
- "depHash": "14535955794621790132"}
