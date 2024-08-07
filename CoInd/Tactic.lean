@@ -78,17 +78,34 @@ def parseGoal (goal: Expr) (thm: Expr) : MetaM (Expr × List Expr) := do
       throwError "the goal and the coinduction theorem doesn't match"
     return (goalFn, exprs)
 
-elab "coinduction" "[" hyps:term,* "]" "generalizing" "[" args:term,* "]" "using" thm:term : tactic => do
+syntax "coinduction" ("[" (term),* "]")? "generalizing" "[" (term),* "]" "using" term : tactic
+
+--elab "coinduction" "[" hyps:term,* "]" "generalizing" "[" args:term,* "]" "using" thm:term : tactic => do
+elab_rules : tactic
+| `(tactic| coinduction $[ [ $hyps:term,* ] ]? generalizing [ $args:term,* ] using $thm:term ) => do
   let thm ← Tactic.elabTerm thm none
-  have hyps : Array Term := hyps
+
 
   withMainContext do
+    let hyps : Array Expr ←
+      match hyps with
+      | .some array => Array.mapM (λ h => Tactic.elabTerm h .none) array
+      | .none => (do
+        let mut ret : Array Expr := #[]
+        for ldecl in ← getLCtx do
+          if ldecl.isImplementationDetail then
+            continue
+
+          if let .sort .zero := ← whnf (← inferType ldecl.type) then
+            ret := ret.push ldecl.toExpr
+        return ret)
+
     let mvarid ← getMainGoal
     let goal ← getMainTarget
     let (goalFn, exprs) ← parseGoal goal (← inferType thm)
 
     let ⟨P, h⟩ ← Property.parse
-      <| List.reverse <| Array.toList <| ← Array.mapM (λ h => Tactic.elabTerm h none) hyps
+      <| List.reverse <| Array.toList hyps
 
     let new_goal ← mkFreshExprMVar <| .some <| ← forallTelescope (← inferType thm) λ args goalPure => do
       let .some (_, _, args, _) := parseThmArgs args.toList | throwError errorMessage

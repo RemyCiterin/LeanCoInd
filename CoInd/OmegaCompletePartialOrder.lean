@@ -490,5 +490,16 @@ def Forall {β: Sort v} (p: β → Admissible α) : Admissible α where
   | succ n h₁ =>
     exact hyp (Fix.Iter f n) h₁
 
+-- prove that a "lustre node" verify a property if this property is inductive
+def NodeFix_thm {β: Type v}
+  [OmegaCompletePartialOrder β] [OrderBot β]
+  (node_eqs: α →𝒄 β →𝒄 β)
+  (p: Admissible α) (q: Admissible β)
+  (IsInv: ∀ x y, x ∈ p → y ∈ q → node_eqs x y ∈ q)
+  (x: α) (h₁: x ∈ p) : FixCont.comp node_eqs x ∈ q := by
+  simp only [ContinuousHom.comp_apply, FixCont_apply]
+  apply Fix_thm
+  intro y h₂
+  apply IsInv <;> assumption
 
 end OmegaCompletePartialOrder.Admissible

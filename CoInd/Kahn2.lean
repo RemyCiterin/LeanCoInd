@@ -369,7 +369,7 @@ instance Kahn.leF.SC : ScottContinuousNat (@Kahn.leF.mono α) where
 
 def Kahn.le.refl (x: Kahn α) : x ≤ x := by
   simp only [LE.le]
-  coinduction [] generalizing [x] using Kahn.le.coind α; clear x
+  coinduction generalizing [x] using Kahn.le.coind α; clear x
   intro a b ⟨x, h₁, h₂, h₃⟩; clear h₃
   induction h₁
   induction h₂
@@ -384,7 +384,7 @@ def Kahn.le.refl (x: Kahn α) : x ≤ x := by
 
 def Kahn.le.trans (x y z: Kahn α) : x ≤ y → y ≤ z → x ≤ z := by
   intro h₁ h₂
-  coinduction [h₁, h₂] generalizing [x, y, z] using Kahn.le.coind α
+  coinduction generalizing [x, y, z] using Kahn.le.coind α
   clear x y z h₁ h₂
   intro l r ⟨x, y, z, h₁, h₂, h₃, h₄⟩
   induction h₁
@@ -537,7 +537,7 @@ theorem Kahn.lub.unfold (f: ℕ →o Kahn α) :
     rfl
 
 theorem Kahn.lub_le (f: ℕ →o Kahn α)(x: Kahn α) (hyp: ∀ n, f n ≤ x) : lub f ≤ x := by
-  coinduction [hyp] generalizing [f, x] using le.coind α
+  coinduction generalizing [f, x] using le.coind α
   clear hyp f x
   intro a b ⟨f, x, lhs, rhs, hyp⟩
   induction lhs
@@ -571,7 +571,7 @@ theorem Kahn.lub_le (f: ℕ →o Kahn α)(x: Kahn α) (hyp: ∀ n, f n ≤ x) : 
 
 
 theorem Kahn.le_lub (f: Nat →o Kahn α) (n: Nat) (X : Kahn α) (hX: X ≤ f n) : X ≤ lub f := by
-  coinduction [hX] generalizing [X, n, f] using le.coind α
+  coinduction generalizing [X, n, f] using le.coind α
   clear hX X n f
   simp only [and_true]
   intro x y ⟨X, n, f, h₁, h₂, hX⟩
@@ -630,7 +630,7 @@ theorem Kahn.le_lub (f: Nat →o Kahn α) (n: Nat) (X : Kahn α) (hX: X ≤ f n)
 noncomputable instance : OmegaCompletePartialOrder (Kahn α) where
   le_antisymm := by
     intro a b h₁ h₂
-    coinduction [h₁, h₂] generalizing [a, b] using Kahn.bisim
+    coinduction generalizing [a, b] using Kahn.bisim
     clear h₁ h₂ a b
     intro s₁ s₂ ⟨a, b, eq₁, eq₂, h₁, h₂⟩
     induction eq₁
@@ -675,7 +675,7 @@ attribute [eqns Kahn.fst.unfold_cons Kahn.fst.unfold_bot] Kahn.fst
 theorem Kahn.fst.monotone {α: Type u} {β: Type v} :
   ∀ x y: Kahn (α × β), x ≤ y → x.fst ≤ y.fst := by
   intro a b h₁
-  coinduction [h₁] generalizing [a, b] using Kahn.le.coind α
+  coinduction generalizing [a, b] using Kahn.le.coind α
   clear h₁ a b
   intro a b ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
@@ -710,7 +710,7 @@ attribute [eqns Kahn.snd.unfold_cons Kahn.snd.unfold_bot] Kahn.snd
 theorem Kahn.snd.monotone {α: Type u} {β: Type v} :
   ∀ x y: Kahn (α × β), x ≤ y → x.snd ≤ y.snd := by
   intro a b h₁
-  coinduction [h₁] generalizing [a, b] using Kahn.le.coind β
+  coinduction generalizing [a, b] using Kahn.le.coind β
   clear h₁ a b
   intro a b ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
@@ -759,7 +759,7 @@ attribute [eqns Kahn.tup.unfold_cons Kahn.tup.unfold_bot_left Kahn.tup.unfold_bo
 
 @[simp] theorem Kahn.tup_fst_snd {α: Type u} {β: Type v} (k: Kahn (α × β)) :
   tup k.fst k.snd = k := by
-  coinduction [] generalizing [k] using bisim
+  coinduction generalizing [k] using bisim
   clear k
   intro s₁ s₂ ⟨x, h₁, h₂, _⟩
   induction h₁
@@ -778,7 +778,7 @@ attribute [eqns Kahn.tup.unfold_cons Kahn.tup.unfold_bot_left Kahn.tup.unfold_bo
 @[mono] theorem Kahn.tup.monotone {α: Type u} {β: Type v} :
   ∀ (x y: Kahn α) (z w: Kahn β), x ≤ y → z ≤ w → tup x z ≤ tup y w := by
   intro x y z w h₁ h₂
-  coinduction [h₁, h₂] generalizing [x, y, z, w] using Kahn.le.coind _
+  coinduction generalizing [x, y, z, w] using Kahn.le.coind _
   clear h₁ h₂ x y z w
   intro X Y ⟨x, y, z, w, h₁, h₂, h₃, h₄⟩
   induction h₁
@@ -857,7 +857,7 @@ attribute [eqns Kahn.map.unfold_bot Kahn.map.unfold_cons] Kahn.map
 @[mono] theorem Kahn.map.monotone {α: Type u} {β: Type v} (f: α → β) :
   ∀ x y, x ≤ y → map f x ≤ map f y := by
   intro x y h₁
-  coinduction [h₁] generalizing [x, y] using Kahn.le.coind _
+  coinduction generalizing [x, y] using Kahn.le.coind _
   clear h₁ x y
   intro _ _ ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
