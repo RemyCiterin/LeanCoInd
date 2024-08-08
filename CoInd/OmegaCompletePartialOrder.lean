@@ -510,7 +510,6 @@ def NodeFix_thm {β: Type v}
   intro y h₂
   apply IsInv <;> assumption
 
-#check ContinuousHom
 
 end OmegaCompletePartialOrder.Admissible
 
