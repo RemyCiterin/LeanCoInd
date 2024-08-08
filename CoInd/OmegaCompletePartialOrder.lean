@@ -515,7 +515,6 @@ def NodeFix_thm {β: Type v}
 end OmegaCompletePartialOrder.Admissible
 
 
-
 namespace OmegaCompletePartialOrder.ContinuousHom.Prod
 variable {α: Type u} [OmegaCompletePartialOrder α]
 variable {β: Type v} [OmegaCompletePartialOrder β]
@@ -633,7 +632,249 @@ def curry : (α × β →𝒄 γ) ≃o (α →𝒄 β →𝒄 γ) where
     · intro x y
       exact h (x, y)
 
+def mk : α →𝒄 β →𝒄 α × β :=
+  curry id
+
 end OmegaCompletePartialOrder.ContinuousHom.Prod
+
+namespace OmegaCompletePartialOrder.ContinuousHom.Sum
+variable {α: Type u} [OmegaCompletePartialOrder α]
+variable {β: Type v} [OmegaCompletePartialOrder β]
+variable {γ: Type w} [OmegaCompletePartialOrder γ]
+
+inductive le : α ⊕ β → α ⊕ β → Prop where
+| inl {x y} : x ≤ y → le (.inl x) (.inl y)
+| inr {x y} : x ≤ y → le (.inr x) (.inr y)
+
+instance : Preorder (α ⊕ β) where
+  le := le
+
+  le_refl
+  | .inl x => .inl (le_refl x)
+  | .inr x => .inr (le_refl x)
+
+  le_trans
+  | _, _, _, .inl h₁, .inl h₂ => .inl (le_trans h₁ h₂)
+  | _, _, _, .inr h₁, .inr h₂ => .inr (le_trans h₁ h₂)
+
+def from_inl_le {x: α} (y: α ⊕ β) (h: Sum.inl x ≤ y) : {z: α // .inl z = y} :=
+  match y with
+  | .inl z => ⟨z, rfl⟩
+  | .inr _ => False.elim (by cases h)
+
+def from_inr_le {x: β} (y: α ⊕ β) (h: Sum.inr x ≤ y) : {z: β // .inr z = y} :=
+  match y with
+  | .inr z => ⟨z, rfl⟩
+  | .inl _ => False.elim (by cases h)
+
+def from_le_inl (x: α ⊕ β) {y: α} (h: x ≤ Sum.inl y) : {z: α // .inl z = x} :=
+  match x with
+  | .inl z => ⟨z, rfl⟩
+  | .inr _ => False.elim (by cases h)
+
+def from_le_inr (x: α ⊕ β) {y: β} (h: x ≤ Sum.inr y) : {z: β // .inr z = x} :=
+  match x with
+  | .inr z => ⟨z, rfl⟩
+  | .inl _ => False.elim (by cases h)
+
+instance : PartialOrder (α ⊕ β) where
+  le_antisymm
+  | .inl x, .inl y, .inl h₁, .inl h₂ => by rw [le_antisymm h₁ h₂]
+  | .inr x, .inr y, .inr h₁, .inr h₂ => by rw [le_antisymm h₁ h₂]
+
+#check from_inl_le
+
+@[simps! coe]
+def OrderHom.inl : α →o (α ⊕ β) where
+  toFun x := .inl x
+  monotone' := by
+    intro a b h₁
+    apply le.inl h₁
+
+@[simps! coe]
+def OrderHom.inr : β →o (α ⊕ β) where
+  toFun x := .inr x
+  monotone' := by
+    intro a b h₁
+    apply le.inr h₁
+
+def Chain.fromSum_left (c: Chain (α ⊕ β)) (x: α) (h: ∀ n, .inl x ≤ c n) : Chain α where
+  toFun n :=
+    from_inl_le (c n) (h n)
+
+  monotone' := by
+    intro x y h₁
+    simp only
+    generalize from_inl_le (c x) (h x) = a
+    generalize from_inl_le (c y) (h y) = b
+    cases a with | mk a h₂ =>
+    cases b with | mk b h₃ =>
+    have h₄ := c.monotone h₁
+    rw [←h₂, ←h₃] at h₄
+    cases h₄ with
+    | inl h =>
+      exact h
+
+def Chain.fromSum_right (c: Chain (α ⊕ β)) (x: β) (h: ∀ n, .inr x ≤ c n) : Chain β where
+  toFun n :=
+    from_inr_le (c n) (h n)
+
+  monotone' := by
+    intro x y h₁
+    simp only
+    generalize from_inr_le (c x) (h x) = a
+    generalize from_inr_le (c y) (h y) = b
+    cases a with | mk a h₂ =>
+    cases b with | mk b h₃ =>
+    have h₄ := c.monotone h₁
+    rw [←h₂, ←h₃] at h₄
+    cases h₄ with
+    | inr h =>
+      exact h
+
+def Chain.fromSum_left_eq (c: Chain (α ⊕ β)) (x: α) (h: ∀ n, .inl x ≤ c n) :
+  ∀ n, c n = .inl (fromSum_left c x h n) := by
+  intro n
+  simp only [fromSum_left]
+  rw [OrderHom.mk_apply]
+  generalize from_inl_le (c n) (h n) = a
+  rw [a.property]
+
+def Chain.fromSum_right_eq (c: Chain (α ⊕ β)) (x: β) (h: ∀ n, .inr x ≤ c n) :
+  ∀ n, c n = .inr (fromSum_right c x h n) := by
+  intro n
+  simp only [fromSum_right]
+  rw [OrderHom.mk_apply]
+  generalize from_inr_le (c n) (h n) = a
+  rw [a.property]
+
+#check OrderHom.ext
+#check funext
+
+inductive Chain.fromSum.Result (chain: Chain (α ⊕ β)) where
+| inl (c: Chain α) : chain = c.map OrderHom.inl → Result chain
+| inr (c: Chain β) : chain = c.map OrderHom.inr → Result chain
+
+def Chain.fromSum (chain: Chain (α ⊕ β)) : fromSum.Result chain :=
+  match h: chain 0 with
+  | .inl x =>
+    have h' : ∀ n, Sum.inl x ≤ chain n := λ n => cast (by rw [h]) <| chain.monotone (Nat.zero_le n)
+    .inl (Chain.fromSum_left chain x h') <|
+      OrderHom.ext chain ((fromSum_left chain x h').map OrderHom.inl)
+        (funext (fromSum_left_eq chain x h'))
+  | .inr x =>
+    have h' : ∀ n, Sum.inr x ≤ chain n := λ n => cast (by rw [h]) <| chain.monotone (Nat.zero_le n)
+    .inr (Chain.fromSum_right chain x h') <|
+      OrderHom.ext chain ((fromSum_right chain x h').map OrderHom.inr)
+        (funext (fromSum_right_eq chain x h'))
+
+instance : OmegaCompletePartialOrder (α ⊕ β) where
+  ωSup chain :=
+    match Chain.fromSum chain with
+    | .inl c _ => .inl (ωSup c)
+    | .inr c _ => .inr (ωSup c)
+
+  le_ωSup := by
+    intro chain n
+    simp only
+    generalize Chain.fromSum chain = ret
+    cases ret with
+    | inl c h =>
+      simp only
+      rw [h]
+      simp only [OrderHom.inl_coe, Chain.map_coe, Function.comp_apply]
+      apply le.inl
+      apply le_ωSup
+    | inr c h =>
+      simp only
+      rw [h]
+      simp only [OrderHom.inl_coe, Chain.map_coe, Function.comp_apply]
+      apply le.inr
+      apply le_ωSup
+
+  ωSup_le := by
+    intro chain X h₁
+    simp only
+    generalize Chain.fromSum chain = ret
+    cases ret with
+    | inl c h =>
+      simp only
+      rw [h] at h₁
+      simp only [OrderHom.inl_coe, Chain.map_coe, Function.comp_apply] at h₁
+      let ⟨x, h⟩ := from_inl_le X (h₁ 0)
+      induction h
+      apply le.inl
+      apply ωSup_le
+      intro n
+      specialize h₁ n
+      cases h₁
+      assumption
+    | inr c h =>
+      simp only
+      rw [h] at h₁
+      simp only [OrderHom.inl_coe, Chain.map_coe, Function.comp_apply] at h₁
+      let ⟨x, h⟩ := from_inr_le X (h₁ 0)
+      induction h
+      apply le.inr
+      apply ωSup_le
+      intro n
+      specialize h₁ n
+      cases h₁
+      assumption
+
+@[simp]
+def ωSup_inl (chain : Chain α) : ωSup (chain.map OrderHom.inl : Chain (α⊕β)) = .inl (ωSup chain) := by
+  rfl
+
+@[simp]
+def ωSup_inr (chain : Chain β) : ωSup (chain.map OrderHom.inr : Chain (α⊕β)) = .inr (ωSup chain) := by
+  rfl
+
+@[simps! apply]
+def inl : α →𝒄 α ⊕ β where
+  toFun := OrderHom.inl
+  monotone' := OrderHom.inl.monotone'
+  cont _ := rfl
+
+@[simps! apply]
+def inr : β →𝒄 α ⊕ β where
+  toFun := OrderHom.inr
+  monotone' := OrderHom.inr.monotone'
+  cont _ := rfl
+
+@[simps! apply]
+def elim (inl: α →𝒄 γ) (inr: β →𝒄 γ) : α ⊕ β →𝒄 γ where
+  toFun
+  | .inl x => inl x
+  | .inr x => inr x
+
+  monotone' := by
+    intro a b h₁
+    cases h₁
+    · apply inl.monotone'
+      assumption
+    · apply inr.monotone'
+      assumption
+
+  cont := by
+    intro chain
+    simp
+    generalize Chain.fromSum chain = ret
+    cases ret with
+    | inl c h₁ =>
+      rw [h₁]
+      calc
+        _ = inl (ωSup c) := rfl
+        _ = ωSup (c.map inl) := inl.cont c
+        _ = _ := rfl
+    | inr c h₁ =>
+      rw [h₁]
+      calc
+        _ = inr (ωSup c) := rfl
+        _ = ωSup (c.map inr) := inr.cont c
+        _ = _ := rfl
+
+end OmegaCompletePartialOrder.ContinuousHom.Sum
 
 
 @[to_additive existing OmegaCompletePartialOrder.Cat]
