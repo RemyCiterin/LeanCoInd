@@ -94,33 +94,41 @@ inductive ContTerm.IR where
 | term : Term → IR
 | arg : Nat → IR
 
-def ContTerm.mkArg : Nat → MacroM (TSyntax `term)
+def ContTerm.mkArg (depth: ℕ) : Nat → MacroM (TSyntax `term)
 | 0 => do
-  `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.snd)
+  -- at depth 1 the only free variable has value 0
+  if depth = 1
+  then `(term| OmegaCompletePartialOrder.ContinuousHom.id)
+  else `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.snd)
 | n+1 => do
   `(term|
     OmegaCompletePartialOrder.ContinuousHom.comp
-      $(←mkArg n) OmegaCompletePartialOrder.ContinuousHom.Prod.fst)
+      $(←mkArg (depth-1) n) OmegaCompletePartialOrder.ContinuousHom.Prod.fst)
 
-def ContTerm.IR.toTerm : IR → MacroM Term
-| .arg n => mkArg n
+def ContTerm.IR.toTerm (depth: ℕ) : IR → MacroM Term
+| .arg n => mkArg depth n
 | .showFrom ir t => do
-  `(term| ($(←toTerm ir) : _ →𝒄 $t))
-| .term t =>
+  `(term| ($(←toTerm depth ir) : _ →𝒄 $t))
+| .term t => do
   `(term| OmegaCompletePartialOrder.ContinuousHom.const $t)
 | .lambda .none body => do
-  `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.curry $(←toTerm body))
+  if depth = 0
+  then `(term| $(←toTerm (depth+1) body))
+  else `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.curry $(←toTerm (depth+1) body))
 | .lambda (.some t) body => do
-  `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.curry ($(←toTerm body) : _ × $t →𝒄 _))
+  if depth = 0
+  then `(term| ($(←toTerm (depth+1) body) : $t →𝒄 _))
+  else `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.curry ($(←toTerm (depth+1) body) : _ × $t →𝒄 _))
 | .app lhs rhs => do
   `(term|
     OmegaCompletePartialOrder.ContinuousHom.comp
-      (OmegaCompletePartialOrder.ContinuousHom.Prod.curry.symm $(←toTerm lhs))
+      (OmegaCompletePartialOrder.ContinuousHom.Prod.curry.symm $(←toTerm depth lhs))
       (OmegaCompletePartialOrder.ContinuousHom.Prod.prod
         OmegaCompletePartialOrder.ContinuousHom.id
-        $(←toTerm rhs)
+        $(←toTerm depth rhs)
       )
   )
+
 
 #check OmegaCompletePartialOrder.ContinuousHom.Prod.curry.hom
 
@@ -135,7 +143,7 @@ instance : ToString ContTerm.IR := ⟨ContTerm.IR.toString⟩
 
 #check List.findIdxs
 #print Term
-def ContTerm.Ast.compile (env: List Ident) : ContTerm.Ast → ContTerm.IR
+def ContTerm.IR.compile (env: List Ident) : ContTerm.Ast → ContTerm.IR
 | .lambda name type output =>
   .lambda type (compile (name :: env) output)
 | .showFrom ast type =>
@@ -149,16 +157,100 @@ def ContTerm.Ast.compile (env: List Ident) : ContTerm.Ast → ContTerm.IR
   then .arg idx
   else .term name
 
+#check Lean.expandMacros
+#print TSyntax
+
+#print ContTerm.Ast
+
+def ContTerm.Ast.toTerm : Ast → MacroM Term
+| .term t =>
+  `(term| $t)
+| .showFrom ast t => do
+  `(term| ($(←ast.toTerm) : $t))
+| .ident i =>
+  `(term| $i)
+| .app lhs rhs => do
+  `(term| ($(←toTerm lhs) $(←toTerm rhs)))
+| .lambda id type ast => do
+  let ir := ContTerm.IR.compile [] (.lambda id type ast)
+  let ir ← `(term| $(←ir.toTerm 0))
+  `(term| OmegaCompletePartialOrder.ContinuousHom.mk
+    {toFun := (λ $id => $(←toTerm ast)), monotone' := ($ir).monotone'} ($ir).cont)
+
+#check OmegaCompletePartialOrder.ContinuousHom.mk
+
 macro_rules
 | `(term| λᶜ $b:explicitBinders => $body:cont_term) => do
+  let body : TSyntax `cont_term := .mk <| ← expandMacros body
   let list ← ContTerm.parseBinders b
   let ast := List.foldr (λ (i, t) body => ContTerm.Ast.lambda i t body) (←ContTerm.Ast.parse body) list
-  let ir : ContTerm.IR := ContTerm.Ast.compile [] ast
-  `(term| $(← ir.toTerm) Unit.unit)
+  let ir : ContTerm.IR := ContTerm.IR.compile [] ast
+  ir.toTerm 0
 
-open OmegaCompletePartialOrder
-open ContinuousHom
 
-#check
-  λᶜ (x : Unit ⊕ Empty) (y : _) =>
-    ContinuousHom.Prod.fst({ContinuousHom.Prod.mk}(x, y))
+declare_syntax_cat cont_term_list
+syntax cont_term "," cont_term_list : cont_term_list
+syntax cont_term "," cont_term : cont_term_list
+syntax "⟨" cont_term_list "⟩" : cont_term1
+
+macro_rules
+| `(cont_term1| ⟨ $t₁:cont_term, $t₂:cont_term ⟩) =>
+  `(cont_term1| OmegaCompletePartialOrder.ContinuousHom.Prod.mk($t₁, $t₂))
+| `(cont_term1| ⟨ $t₁:cont_term, $t₂:cont_term_list ⟩) => do
+  have t₂: TSyntax `cont_term := ← `(cont_term| ⟨$t₂⟩)
+  `(cont_term1| OmegaCompletePartialOrder.ContinuousHom.Prod.mk($t₁, $t₂))
+
+
+open OmegaCompletePartialOrder ContinuousHom ContinuousHom.Prod in
+#check λᶜ (x : Unit ⊕ Empty) (y : _) => fst(⟨x, y, y⟩)
+
+namespace OmegaCompletePartialOrder.Cat
+open CategoryTheory
+
+def exp (X: Cat) : Cat ⥤ Cat where
+  obj Y := of (X →𝒄 Y)
+
+  map {Y Z} (f: Y →𝒄 Z) : (X →𝒄 Y) →𝒄 (X →𝒄 Z) :=
+    λᶜ g x => f(g(x))
+
+  map_id := by
+    intro x
+    simp
+    rfl
+
+  map_comp := by
+    intro f g h i j
+    rfl
+
+#check 42
+
+open ContinuousHom ContinuousHom.Prod in
+def adj.homEquiv (X Y Z: Cat) : (X × Y →𝒄 Z) ≃ (Y →𝒄 X →𝒄 Z) where
+    toFun f := λᶜ x y => f(⟨y, x⟩)
+    invFun f := λᶜ p => f(snd(p), fst(p))
+    left_inv := by intro x; rfl
+    right_inv := by intro x; rfl
+
+variable (X: Cat)
+#reduce 𝟭 Cat ⟶ MonoidalCategory.tensorLeft X ⋙  X.exp
+
+
+open ContinuousHom ContinuousHom.Prod in
+def adj (X: Cat) : MonoidalCategory.tensorLeft X ⊣ X.exp where
+  homEquiv Y Z :=
+    adj.homEquiv X Y Z
+
+  unit := sorry
+  counit := sorry
+  homEquiv_unit := by sorry
+  homEquiv_counit := by sorry
+
+
+instance (X: Cat) : Closed X where
+  rightAdj := exp X
+  adj := by
+    sorry
+
+--instance hasFiniteProducts : Limits.HasFiniteProducts Cat.{u} where
+--  out n := ⟨λ F => ⟨⟨⟨⟨_, _⟩, _⟩⟩⟩⟩
+end OmegaCompletePartialOrder.Cat

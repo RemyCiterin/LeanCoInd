@@ -1154,6 +1154,16 @@ instance : MonoidalCategory Cat where
   triangle _ _ := rfl
 
 
+--def exp (X: Cat) : Cat ⥤ Cat where
+--  obj Y := of (X →𝒄 Y)
+--  map {Y Z} (f: Y →𝒄 Z) :=
+--
+--
+--
+--
+--instance (X: Cat) : Closed X where
+--  rightAdj := _
+
 --instance hasFiniteProducts : Limits.HasFiniteProducts Cat.{u} where
 --  out n := ⟨λ F => ⟨⟨⟨⟨_, _⟩, _⟩⟩⟩⟩
 end OmegaCompletePartialOrder.Cat
