@@ -204,6 +204,8 @@ macro_rules
 open OmegaCompletePartialOrder ContinuousHom ContinuousHom.Prod in
 #check λᶜ (x : Unit ⊕ Empty) (y : _) => fst(⟨x, y, y⟩)
 
+
+-- Now a small demo of it: proving that OmegaCompletePartialOrder.Cat is monoidal
 namespace OmegaCompletePartialOrder.Cat
 open CategoryTheory
 
@@ -222,8 +224,6 @@ def exp (X: Cat) : Cat ⥤ Cat where
     intro f g h i j
     rfl
 
-#check 42
-
 open ContinuousHom ContinuousHom.Prod in
 def adj.homEquiv (X Y Z: Cat) : (X × Y →𝒄 Z) ≃ (Y →𝒄 X →𝒄 Z) where
     toFun f := λᶜ x y => f(⟨y, x⟩)
@@ -231,26 +231,63 @@ def adj.homEquiv (X Y Z: Cat) : (X × Y →𝒄 Z) ≃ (Y →𝒄 X →𝒄 Z) w
     left_inv := by intro x; rfl
     right_inv := by intro x; rfl
 
-variable (X: Cat)
-#reduce 𝟭 Cat ⟶ MonoidalCategory.tensorLeft X ⋙  X.exp
+#print NatTrans
 
+def adj.unit (X:Cat) : 𝟭 Cat ⟶ MonoidalCategory.tensorLeft X ⋙  X.exp where
+  app Y := λᶜ (y: Y) (x:X) => ⟨x, y⟩
+  naturality := by
+    intro Y Z f
+    rfl
+
+open ContinuousHom ContinuousHom.Prod in
+def adj.counit (X: Cat) : X.exp ⋙  MonoidalCategory.tensorLeft X ⟶  𝟭 Cat where
+  app Y := λᶜ (p:X × (X →𝒄 Y)) => snd(p)(fst(p))
+  naturality := by
+    intro Y Z f
+    rfl
 
 open ContinuousHom ContinuousHom.Prod in
 def adj (X: Cat) : MonoidalCategory.tensorLeft X ⊣ X.exp where
   homEquiv Y Z :=
     adj.homEquiv X Y Z
 
-  unit := sorry
-  counit := sorry
-  homEquiv_unit := by sorry
-  homEquiv_counit := by sorry
-
+  unit := adj.unit X
+  counit := adj.counit X
+  homEquiv_unit := by aesop
+  homEquiv_counit := by aesop
 
 instance (X: Cat) : Closed X where
   rightAdj := exp X
-  adj := by
-    sorry
+  adj := adj X
 
---instance hasFiniteProducts : Limits.HasFiniteProducts Cat.{u} where
---  out n := ⟨λ F => ⟨⟨⟨⟨_, _⟩, _⟩⟩⟩⟩
+instance : MonoidalClosed Cat where
+
+
+open ContinuousHom ContinuousHom.Prod in
+def π (X Y: Cat.{u}) : (Functor.const (Discrete Limits.WalkingPair)).obj (of (↑X × ↑Y)) ⟶   Limits.pair X Y where
+  app
+  | { as := Limits.WalkingPair.left } => λᶜ (p: X × Y) => fst(p)
+  | { as := Limits.WalkingPair.right } => λᶜ (p: X × Y) => snd(p)
+
+  naturality := by
+    intro ⟨A⟩ ⟨B⟩ f
+    cases A <;>
+    cases B <;>
+    simp at * <;>
+    cases f with | up f =>
+    cases f with | up f =>
+    cases f
+
+
+--instance (X Y:Cat.{u}) : Limits.HasBinaryProduct X Y where
+--  exists_limit := ⟨⟨of (X × Y), π X Y⟩, ⟨λ ⟨pt, ⟨pi, _⟩⟩ => by
+--    simp [Functor.const, Discrete, Limits.pair] at *
+--    specialize pi {as := .left}
+--    simp [Limits.pair, Functor.const, Discrete] at *
+--  , by
+--    sorry
+--  , by
+--    sorry
+--  ⟩⟩
+
 end OmegaCompletePartialOrder.Cat
