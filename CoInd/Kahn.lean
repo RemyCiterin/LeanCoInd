@@ -621,12 +621,6 @@ theorem Kahn.le_lub (f: Nat →o Kahn α) (n: Nat) (X : Kahn α) (hX: X ≤ f n)
           apply f.monotone'
           simp
 
---noncomputable instance : ωCPO (Kahn α) where
---  bot_le {x} := Kahn.bot_le x
---  lub := Kahn.lub
---  lub_le {f x} h := Kahn.lub_le f x h
---  le_lub {f n} := Kahn.le_lub f n (f n) (le_refl _)
-
 noncomputable instance : OmegaCompletePartialOrder (Kahn α) where
   le_antisymm := by
     intro a b h₁ h₂
