@@ -18,6 +18,8 @@ import Lean.Data.RBMap
 import Lean.Data.RBTree
 import Qq
 
+#print OmegaCompletePartialOrder
+
 
 open OmegaCompletePartialOrder
 
@@ -739,8 +741,10 @@ def Kahn.findCons.Result.offset (m: ℕ) (f: ℕ →o Kahn α)
     apply congrArg f
     simp_arith
 
+#check Kahn.corec
+#print Kahn.F
 def Kahn.fst {α: Type u} {β: Type v} (k: Kahn (α × β)) : Kahn α :=
-  corec (fun k => Kahn.cases k (cons:= λ  x xs => F.cons x.fst xs) (bot := F.bot)) k
+  corec (fun k => Kahn.cases k (cons:= λ x xs => F.cons x.fst xs) (bot := F.bot)) k
 
 @[simp] theorem Kahn.fst.unfold_bot {α: Type u} {β: Type v} :
   @Kahn.fst α β ⊥ = ⊥ := by

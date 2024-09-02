@@ -284,6 +284,9 @@ macro_rules
 open OmegaCompletePartialOrder ContinuousHom ContinuousHom.Prod in
 #check λᶜ (x : Unit × Empty) (y : _) => (λᶜ x y => fst(x))(x, y)
 
+open OmegaCompletePartialOrder ContinuousHom ContinuousHom.Prod in
+#check λᶜ f p => f(fst(p), snd(p))
+
 open OrderHom
 #check λᵒ (x : Unit × Empty) (y : _) => (λᵒ x y => fst(x))(x, y)
 

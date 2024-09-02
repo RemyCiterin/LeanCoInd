@@ -18,6 +18,19 @@ variable {α: Type u₁} {α': Type u₂}
 variable {β: α → Type u₃} [(a : α) → OmegaCompletePartialOrder (β a)]
 variable {γ: α → Type u₄} [(a : α) → OmegaCompletePartialOrder (γ a)]
 
+@[simps! apply]
+def OmegaCompletePartialOrder.foreach
+  {T: Type u₅} [OmegaCompletePartialOrder T]
+  (f: ∀ a: α, T →𝒄 β a) : T →𝒄 (∀ a: α, β a) where
+  toFun t a := f a t
+  monotone' x y h a := (f a).monotone h
+  cont := by
+    intro chain
+    funext a
+    simp only [OrderHom.mk_apply]
+    rw [(f a).continuous chain]
+    rfl
+
 
 @[simps! apply]
 def OmegaCompletePartialOrder.proj (a: α) : ((a: α) → β a) →𝒄 (β a) where
@@ -616,7 +629,7 @@ def curry.inv (f: α →𝒄 β →𝒄 γ) : α × β →𝒄 γ where
           apply le_trans _ (le_ωSup _ n)
           apply le_refl
 
-@[simps! apply symm_apply]
+-- @[simps! apply symm_apply]
 def curry : (α × β →𝒄 γ) ≃o (α →𝒄 β →𝒄 γ) where
   toFun := curry.hom
   invFun := curry.inv
@@ -630,6 +643,14 @@ def curry : (α × β →𝒄 γ) ≃o (α →𝒄 β →𝒄 γ) where
       exact h x y
     · intro x y
       exact h (x, y)
+
+@[simp]
+def curry_apply (f: α × β →𝒄 γ) (x: α) (y: β) :
+  curry f x y = f (x, y) := rfl
+
+@[simp]
+def curry_symm_apply (f: α →𝒄 β →𝒄 γ) (x: α) (y: β) :
+  curry.symm f (x, y) = f x y := rfl
 
 def mk : α →𝒄 β →𝒄 α × β :=
   curry id
