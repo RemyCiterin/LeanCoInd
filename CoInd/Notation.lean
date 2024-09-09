@@ -253,7 +253,6 @@ macro_rules
 
 def foobar2 : (TSyntax `ident) := (mkIdent `x)
 
-
 declare_syntax_cat ccc_term_list
 syntax ccc_term "," ccc_term_list : ccc_term_list
 syntax ccc_term "," ccc_term : ccc_term_list

@@ -272,7 +272,7 @@ def Kahn.cons.injEq (x y: α) (xs ys: Kahn α) :
 theorem Kahn.corec.unfold {β: Type v} (f: β → F α β) (x₀: β) :
   corec f x₀ =
       match f x₀ with
-      | .cons x xs => (cons x <| corec f xs)
+      | .cons x xs => x ::: (corec f xs)
       | .bot => ⊥ := by
   have := congrArg Kahn.F.mk (dest_corec f x₀)
   rw [mk_dest] at this
@@ -1072,6 +1072,7 @@ def OmegaCompletePartialOrder.ContinuousHom.Kahn.tup {α: Type u} {β: Type v} :
 
 #check Kahn.ωSup_cons
 
+
 def Kahn.fby (x y: Kahn α) : Kahn α :=
   Kahn.cases x (cons := λ x _ => x ::: y) (bot := ⊥)
 
@@ -1228,3 +1229,13 @@ def OmegaCompletePartialOrder.ContinuousHom.Kahn.map {α: Type u} {β: Type v} (
   monotone' := Kahn.map.monotone f
   cont := Kahn.map.continuous f
 
+def Kahn.const (x: α) : Kahn α :=
+  corec (λ _ => .cons x Unit.unit) Unit.unit
+
+def Kahn.const.unfold (x: α) : const x = (x ::: const x) := by
+  conv =>
+    lhs
+    simp only [const]
+    rw [corec.unfold]
+    rfl
+  rfl

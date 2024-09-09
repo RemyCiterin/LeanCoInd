@@ -86,39 +86,6 @@ def prod.apply {α: Type u} {β: Type v}
 
 #check ContinuousHom.Prod.curry
 
-@[refinment_type]
-def elim_curry {α: Type u} {β: Type v} {γ: Type w}
-  [OmegaCompletePartialOrder α]
-  [OmegaCompletePartialOrder β]
-  [OmegaCompletePartialOrder γ]
-  [OrderBot α] (P: Admissible α)
-  (b: β) (c: γ) (f: β × γ →𝒄 α) :
-  f (b, c) ∈ P → ContinuousHom.Prod.curry f b c ∈ P := by
-  intro h
-  apply h
-
-@[refinment_type]
-def elim_uncurry {α: Type u} {β: Type v} {γ: Type w}
-  [OmegaCompletePartialOrder α]
-  [OmegaCompletePartialOrder β]
-  [OmegaCompletePartialOrder γ]
-  [OrderBot α] (P: Admissible α)
-  (b: β) (c: γ) (f: β →𝒄 γ →𝒄 α) :
-  f b c ∈ P → ContinuousHom.Prod.curry.symm f (b, c) ∈ P := by
-  intro h
-  apply h
-
-@[refinment_type]
-def elim_comp {α: Type u} {β: Type v} {γ: Type w}
-  [OmegaCompletePartialOrder α]
-  [OmegaCompletePartialOrder β]
-  [OmegaCompletePartialOrder γ]
-  [OrderBot α] (P: Admissible α)
-  (c: γ) (f: γ →𝒄 β) (g: β →𝒄 α) :
-  g (f c) ∈ P → ContinuousHom.comp g f c ∈ P := by
-  intro h
-  apply h
-
 
 
 end OmegaCompletePartialOrder.Admissible
@@ -238,6 +205,32 @@ def Square.unfold_cons {α: Type u} (P: Set α) (x: α) (xs: Kahn α) :
   rw [←pgfp.unfold]
   apply Square.SetF.cons x xs rfl h₁ (Or.inr h₂)
 
+@[simp]
+def Square.rewrite_cons {α: Type u} (P: Set α) (x: α) (xs: Kahn α) :
+  (x ::: xs ∈ Square P) = (x ∈ P ∧ xs ∈ Square P) := by
+  apply propext
+  constructor
+  · intro h
+    simp only [Square, Membership.mem] at h
+    rw [←pgfp.unfold] at h
+    cases h with
+    | bot eq =>
+      simp [Bot.bot, Kahn.cons] at eq
+    | cons y ys eq h₁ h₂ =>
+      rw [Kahn.cons.injEq] at eq
+      induction eq.left
+      induction eq.right
+      constructor
+      · exact h₁
+      · cases h₂ with
+        | inl h =>
+          cases h
+        | inr h =>
+          exact h
+  · intro ⟨h₁, h₂⟩
+    refinment_type
+
+
 @[refinment_type]
 def Square.unfold_bot {α: Type u} (P: Set α) :
   ⊥  ∈ Square P := by
@@ -265,6 +258,300 @@ def Square.coind {α: Type u} (P: Set α) (hyp: Kahn α → Prop) :
   apply (SetF_mono P).monotone this
   apply h₁
   apply h₂
+
+
+open Lean Elab Meta in
+inductive Ast : Type where
+| ident : Ident → Ast
+| app : Term → List Ast → Ast
+| showFrom : Ast → Term → Ast
+| term : Term → Ast
+
+namespace Ast
+
+open Lean Elab Meta
+
+structure Node where
+  inputs : List (Ident × Term)       -- input variables
+  outputs : List (Ast × Term)        -- output variables and their definitions
+  locals : List (Ident × Term × Ast) -- local variables and their recursive definitions
+
+inductive IR where
+| showFrom : IR → Term → IR
+| term : Term → IR -- term antiquotation
+| app : Term → List IR → IR -- sub-node
+| loc : Nat → IR -- n-th local variable
+| input : Nat → IR -- n-th input variable
+
+open TSyntax.Compat in
+def parseExplicitBindersAux (idents : Array Syntax) (type? : Option Syntax) (acc: List (Ident × Option Term))
+  : MacroM (List (Ident × Option Term)) :=
+  let rec loop (i : Nat) (acc : List (Ident × Option Term)) := do
+    match i with
+    | 0   => pure acc
+    | i+1 =>
+      let ident := (idents[i]!)[0]
+      let acc := match ident.isIdent, type? with
+        | true,  none      => (ident, none) :: acc
+        | true,  some type => (ident, some type) :: acc
+        | false, none      => (mkIdent `_, none) :: acc
+        | false, some type => (mkIdent `_, some type) :: acc
+      loop i acc
+  loop idents.size acc
+
+def parseBrackedBindersAux (binders : Array Syntax) (acc: List (Ident × Option Term))
+  : MacroM (List (Ident × Option Term)) :=
+  let rec loop (i : Nat) (acc : List (Ident × Option Term)) := do
+    match i with
+    | 0   => pure acc
+    | i+1 =>
+      let idents := (binders[i]!)[1].getArgs
+      let type   := (binders[i]!)[3]
+      loop i (← parseExplicitBindersAux idents (some type) acc)
+  loop binders.size acc
+
+partial def parseBinders (explicitBinders: Syntax) : MacroM (List (Ident × Option Term)) := do
+  let explicitBinders := explicitBinders[0]
+  if explicitBinders.getKind == ``Lean.unbracketedExplicitBinders then
+    let idents   := explicitBinders[0].getArgs
+    let type? := if explicitBinders[1].isNone then none else some explicitBinders[1][1]
+    parseExplicitBindersAux idents type? []
+  else if explicitBinders.getArgs.all (·.getKind == ``Lean.bracketedExplicitBinders) then
+    parseBrackedBindersAux explicitBinders.getArgs []
+  else
+    Macro.throwError "unexpected explicit binder"
+
+declare_syntax_cat lustre_term
+declare_syntax_cat lustre_decl
+declare_syntax_cat lustre_eq
+
+syntax ident : lustre_term -- used to determine arguments and antiquotation
+syntax "(" lustre_term ")" : lustre_term
+syntax "(" lustre_term " : " term ")" : lustre_term
+syntax "{" term "}" : lustre_term -- antiquotation
+syntax "{" term "}" "(" lustre_term,* ")" : lustre_term -- function application
+
+syntax ident ":" term ":=" lustre_term : lustre_eq
+syntax ident ":=" lustre_term : lustre_eq
+
+syntax "defnode" ident explicitBinders ":" term ":=" lustre_term "where" lustre_eq+ : command
+
+instance : Inhabited Ast := ⟨.ident (mkIdent `_)⟩
+instance : Inhabited IR := ⟨.term (mkIdent `_)⟩
+
+partial def parse_term : TSyntax `lustre_term → MacroM Ast
+| `(lustre_term| $i:ident) => pure (.ident i)
+| `(lustre_term| { $t:term }) => pure (.term t)
+| `(lustre_term| ( $t:lustre_term )) => parse_term t
+| `(lustre_term| ( $t:lustre_term : $typ:term )) => do
+  return .showFrom (←parse_term t) typ
+| `(lustre_term| { $t₁:term } ($t₂:lustre_term,*)) => do
+  have t₂: Array (TSyntax `lustre_term) := t₂
+  let t₂: List Ast ← List.mapM parse_term t₂.toList
+  return .app t₁ t₂
+| _ => Macro.throwError "unsupported syntax"
+
+-- replace idents by De Bruijn index
+partial def compile (inputs: List Ident) (locals: List Ident) : Ast → IR
+| .ident name =>
+  if let idx :: _ := List.findIdxs (λ n => n == name) locals
+  then .loc idx
+  else
+    if let idx :: _ := List.findIdxs (λ n => n == name) inputs
+    then .input idx
+    else .term name
+| .app function args =>
+  .app function (compile inputs locals <$> args)
+| .showFrom t type =>
+  .showFrom (compile inputs locals t) type
+| .term t => .term t
+
+def getPath (numArgs: Nat) : Nat → MacroM Term
+| n+1 => do
+  `(term|
+    OmegaCompletePartialOrder.ContinuousHom.comp
+      $(←getPath (numArgs-1) n)
+      OmegaCompletePartialOrder.ContinuousHom.Prod.snd
+  )
+| 0 =>
+  if numArgs = 1
+  then  `(term| OmegaCompletePartialOrder.ContinuousHom.id)
+  else `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.fst)
+
+-- return a function of type Inputs × Locals →𝒄 argType
+def getInput (arg: Nat) (numInputs: Nat) : MacroM Term := do
+  `(term|
+    OmegaCompletePartialOrder.ContinuousHom.comp
+      $(←getPath numInputs arg)
+      OmegaCompletePartialOrder.ContinuousHom.Prod.fst
+  )
+
+-- return a function of type Inputs × Locals →𝒄 argType
+def getLoc (arg: Nat) (numLocals: Nat) : MacroM Term := do
+  `(term|
+    OmegaCompletePartialOrder.ContinuousHom.comp
+      $(←getPath numLocals arg)
+      OmegaCompletePartialOrder.ContinuousHom.Prod.snd
+  )
+
+#print IR
+
+#check ContinuousHom.Prod.curry
+#check ContinuousHom.Prod.prod
+#check Nat.foldM
+#check List.foldlM
+
+
+-- like prod but of arrity n: return a function of type `α →𝒄 T₁ × ... Tₙ` from a list of functions
+-- of type `α →𝒄 Tᵢ`
+def prodNarith : List Term → MacroM Term
+| [] => Macro.throwError "empty function application"
+| [t] => pure t
+| x :: xs => do
+  `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.prod $x $(←prodNarith xs))
+
+partial def IR.toTerm (numInputs numLocals: Nat) : IR → MacroM Term
+| .showFrom ir t => do `(term| (show _ × _ →𝒄 Kahn $t from $(←ir.toTerm numInputs numLocals)))
+| .input n => getInput n numInputs
+| .loc n => getLoc n numLocals
+| .term t => `(term| OmegaCompletePartialOrder.ContinuousHom.const $t)
+| .app function [] => do
+  `(term| OmegaCompletePartialOrder.ContinuousHom.const $function)
+| .app function args => do
+  -- A list of terms of type I × L →𝒄 Tᵢ
+  let args ← List.mapM (toTerm numInputs numLocals) args
+  let function ←
+    Nat.foldM
+      (λ _ t => `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.curry.symm $t))
+      function (args.length - 1)
+  -- function is of type T₀ × ... × Tₙ →𝒄 T
+  -- return a term of type I × L →𝒄 T
+
+  -- we want a term of type I × L →𝒄 T₀ × ... × Tₙ : construct the arguments from the context
+  let args_fun ← genArgs (List.reverse args)
+  `(term| OmegaCompletePartialOrder.ContinuousHom.comp $function $args_fun)
+where
+  genArgs : List Term → MacroM Term
+  | [] => Macro.throwError "empty function application"
+  | [t] => pure t
+  | x :: xs => do
+    `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.prod $(←genArgs xs) $x)
+
+syntax "λˡᵘˢᵗʳᵉ" explicitBinders "=>" explicitBinders "=>" lustre_term : term
+
+def prodOfList : List Term → MacroM Term
+| [] => Macro.throwError ""
+| [x] => pure x
+| x :: xs => do
+  `($x × $(←prodOfList xs))
+
+macro_rules
+| `(term| λˡᵘˢᵗʳᵉ $b₁:explicitBinders => $b₂:explicitBinders => $body:lustre_term) => do
+  have body : TSyntax `lustre_term := .mk <| ← expandMacros body
+  let l₁ ← parseBinders b₁
+  let l₂ ← parseBinders b₂
+  let ast ← parse_term body
+  let ir := ast.compile (Prod.fst <$> l₁) (Prod.fst <$> l₂)
+  let empty : Term ← `(term| _)
+  let l₁_type := (λ (_, t) =>
+    match t with
+    | .some v => v
+    | .none => empty
+  ) <$> l₁
+  let l₂_type := (λ (_, t) =>
+    match t with
+    | .some v => v
+    | .none => empty
+  ) <$> l₂
+  `(term| show $(←prodOfList l₁_type) × $(←prodOfList l₂_type) →𝒄 _ from $(←ir.toTerm l₁.length l₂.length))
+
+def parseEq : TSyntax `lustre_eq → MacroM (Ident × Term × TSyntax `lustre_term)
+| `(lustre_eq| $i:ident : $t:term := $l:lustre_term) =>
+  pure (i, t, l)
+| `(lustre_eq| $i:ident := $l:lustre_term) => do
+  return (i, ←`(term| _), l)
+| _ => Macro.throwUnsupported
+
+macro_rules
+| `(command| defnode $name_ident:ident $b₁:explicitBinders : $out_type := $out:lustre_term where $eqs:lustre_eq*) => do
+  let Syntax.ident _ _ name _ := name_ident.raw | Macro.throwUnsupported
+  let name_out := mkIdent (.str name "out")
+  let name_eqs := mkIdent (.str name "eqs")
+  let name_fix := mkIdent (.str name "fix")
+  let name_inv := mkIdent (.str name "inv")
+  let name_eval := mkIdent (.str name "eval")
+
+  let empty : Term ← `(term| _)
+
+  have inputs := (λ (i, t) => (i, Option.getD t empty)) <$> (← parseBinders b₁)
+  let locals ← List.mapM parseEq eqs.toList
+
+  have inputs_name := (λ (name, _) => name) <$> inputs
+  have inputs_type := (λ (_, type) => type) <$> inputs
+
+  have locals_name := (λ (name, _, _) => name) <$> locals
+  have locals_type := (λ (_, type, _) => type) <$> locals
+  have locals_term := (λ (_, _, expr) => expr) <$> locals
+
+  let I ← prodOfList inputs_type
+  let L ← prodOfList locals_type
+
+  have toTerm ir := IR.toTerm inputs_type.length locals_type.length ir
+
+  have output_ir := (←parse_term out).compile inputs_name locals_name
+  let output_term ← `(show $I × $L →𝒄 _ from $(←toTerm output_ir))
+
+  let locals_ir ←
+    List.mapM (λ eq => do
+      return (←parse_term eq).compile inputs_name locals_name
+    ) locals_term
+
+  let locals_term ←
+    List.mapM (λ ir => do
+      `(show $I × $L →𝒄 _ from $(←toTerm ir))
+    ) locals_ir
+
+  `(
+    def $name_out : $I × $L →𝒄 $out_type := $output_term
+    def $name_eqs : $I × $L →𝒄 $L := $(←prodNarith locals_term)
+    noncomputable def $name_fix : $I →𝒄 $L :=
+      OmegaCompletePartialOrder.ContinuousHom.comp
+        OmegaCompletePartialOrder.ContinuousHom.fix
+        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs)
+    noncomputable def $name_eval : $I →𝒄 $out_type :=
+      OmegaCompletePartialOrder.ContinuousHom.comp
+        $name_out
+        (OmegaCompletePartialOrder.ContinuousHom.Prod.prod
+          OmegaCompletePartialOrder.ContinuousHom.id
+          $name_fix)
+
+    --def $name_inv (P: Admissible $I) (Inv: Admissible $L) :
+    --  (∀ i l, i ∈ P → l ∈ Inv → $name_eqs (i, l) ∈ Inv) → ∀ i l, $name_fix (i, l) ∈ Inv :=
+    --  OmegaCompletePartialOrder.Admissible.NodeFix_thm $name_fix P Inv
+  )
+
+
+#check OmegaCompletePartialOrder.Admissible.NodeFix_thm
+#check OmegaCompletePartialOrder.ContinuousHom.fix
+
+
+defnode foo (i₁ i₂ i₃: Kahn ℕ) : Kahn ℕ := l₁
+  where
+    l₁ : Kahn ℕ := i₁
+    l₂ : Kahn ℕ := l₁
+    l₂ : Kahn ℕ := i₂
+
+#print foo.out
+#print foo.eqs
+#print foo.fix
+#print foo.eval
+
+variable (I₁ I₂ I₃ L₁ L₂ L₃: Type)
+variable (foo : Kahn L₁ →𝒄 Kahn I₁ →𝒄 Kahn I₂ →𝒄 Unit)
+open ContinuousHom in
+#check λˡᵘˢᵗʳᵉ i₁ i₂ i₃ => l₁ l₂ l₃ => {foo}(l₁, i₂, i₁)
+
+end Ast
 
 
 instance : Add Env where
@@ -332,16 +619,18 @@ open Pi.OmegaCompletePartialOrder
 #check ContinuousHom.Kahn.tup
 
 abbrev ContinuousHom.Kahn.add {α: Type u} [Add α] : Kahn α →𝒄 Kahn α →𝒄 Kahn α :=
-  λᶜ x y => {ContinuousHom.Kahn.map (Function.uncurry Add.add)}(ContinuousHom.Kahn.tup(x, y))
+  λᶜ x y => {ContinuousHom.Kahn.map (λ (x, y) => x+y)}(ContinuousHom.Kahn.tup(x, y))
 
 def proj.i : Str I →𝒄 Kahn (I.type I.var.i) := proj .i
 
+#check ContinuousHom.Kahn.fby
+
 def Eqs : (l: L.var) → Str I →𝒄 Str L →𝒄 Kahn (L.type l)
-| .x => λᶜ i l => ContinuousHom.Kahn.add(proj.i(i), {proj L.var.x}(l))
+| .x => λᶜ i l => ContinuousHom.Kahn.add(proj.i(i), {ContinuousHom.Kahn.fby (Kahn.const 0)}({proj L.var.x}(l)))
 | .y => λᶜ i l => {proj L.var.z}(l)
 | .z => λᶜ i l => {proj L.var.y}(l)
 
-def Out : (o: O.var) → Str I →𝒄 Str L →𝒄 Kahn (O.type o)
+def Out : (v: O.var) → Str I →𝒄 Str L →𝒄 Kahn (O.type v)
 | .o => λᶜ i l => {proj L.var.x}(l)
 
 
@@ -387,8 +676,8 @@ def node.proof : node.ensure (Admissible.foreach node.spec.Input) (Admissible.fo
     intro var
     cases var with
     | x =>
-      simp? [Eqs]
-      simp? [proj.i]
+      simp [eqs.apply, Eqs]
+      simp [proj.i]
       specialize h₁ .i
       specialize h₂ .x
       generalize i I.var.i = input at *
@@ -400,12 +689,16 @@ def node.proof : node.ensure (Admissible.foreach node.spec.Input) (Admissible.fo
       | cons x xs =>
         cases loc with
         | bot =>
-          simp?
-          refinment_type
-        | cons y ys =>
+          rw [Kahn.const.unfold]
           simp? [spec.Local]
+          constructor
+          · simp only [spec.Input, Square.rewrite_cons] at h₁
+            exact h₁.left
+          · refinment_type
+        | cons y ys =>
+          rw [Kahn.const.unfold]
+          simp [spec.Local]
           sorry
-
     | y =>
       trivial
     | z =>
