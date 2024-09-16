@@ -334,7 +334,7 @@ syntax "{" term "}" "(" lustre_term,* ")" : lustre_term -- function application
 syntax ident ":" term ":=" lustre_term : lustre_eq
 syntax ident ":=" lustre_term : lustre_eq
 
-syntax "defnode" ident explicitBinders ":" term ":=" lustre_term "where" lustre_eq+ : command
+syntax "defnode" ident explicitBinders ":=" lustre_term "where" lustre_eq+ : command
 
 instance : Inhabited Ast := ⟨.ident (mkIdent `_)⟩
 instance : Inhabited IR := ⟨.term (mkIdent `_)⟩
@@ -368,11 +368,7 @@ partial def compile (inputs: List Ident) (locals: List Ident) : Ast → IR
 
 def getPath (numArgs: Nat) : Nat → MacroM Term
 | n+1 => do
-  `(term|
-    OmegaCompletePartialOrder.ContinuousHom.comp
-      $(←getPath (numArgs-1) n)
-      OmegaCompletePartialOrder.ContinuousHom.Prod.snd
-  )
+  `(term| OmegaCompletePartialOrder.ContinuousHom.comp $(←getPath (numArgs-1) n) OmegaCompletePartialOrder.ContinuousHom.Prod.snd)
 | 0 =>
   if numArgs = 1
   then  `(term| OmegaCompletePartialOrder.ContinuousHom.id)
@@ -380,19 +376,11 @@ def getPath (numArgs: Nat) : Nat → MacroM Term
 
 -- return a function of type Inputs × Locals →𝒄 argType
 def getInput (arg: Nat) (numInputs: Nat) : MacroM Term := do
-  `(term|
-    OmegaCompletePartialOrder.ContinuousHom.comp
-      $(←getPath numInputs arg)
-      OmegaCompletePartialOrder.ContinuousHom.Prod.fst
-  )
+  `(term| OmegaCompletePartialOrder.ContinuousHom.comp $(←getPath numInputs arg) OmegaCompletePartialOrder.ContinuousHom.Prod.fst)
 
 -- return a function of type Inputs × Locals →𝒄 argType
 def getLoc (arg: Nat) (numLocals: Nat) : MacroM Term := do
-  `(term|
-    OmegaCompletePartialOrder.ContinuousHom.comp
-      $(←getPath numLocals arg)
-      OmegaCompletePartialOrder.ContinuousHom.Prod.snd
-  )
+  `(term| OmegaCompletePartialOrder.ContinuousHom.comp $(←getPath numLocals arg) OmegaCompletePartialOrder.ContinuousHom.Prod.snd)
 
 #print IR
 
@@ -401,14 +389,6 @@ def getLoc (arg: Nat) (numLocals: Nat) : MacroM Term := do
 #check Nat.foldM
 #check List.foldlM
 
-
--- like prod but of arrity n: return a function of type `α →𝒄 T₁ × ... Tₙ` from a list of functions
--- of type `α →𝒄 Tᵢ`
-def prodNarith : List Term → MacroM Term
-| [] => Macro.throwError "empty function application"
-| [t] => pure t
-| x :: xs => do
-  `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.prod $x $(←prodNarith xs))
 
 partial def IR.toTerm (numInputs numLocals: Nat) : IR → MacroM Term
 | .showFrom ir t => do `(term| (show _ × _ →𝒄 Kahn $t from $(←ir.toTerm numInputs numLocals)))
@@ -465,6 +445,7 @@ macro_rules
   ) <$> l₂
   `(term| show $(←prodOfList l₁_type) × $(←prodOfList l₂_type) →𝒄 _ from $(←ir.toTerm l₁.length l₂.length))
 
+
 def parseEq : TSyntax `lustre_eq → MacroM (Ident × Term × TSyntax `lustre_term)
 | `(lustre_eq| $i:ident : $t:term := $l:lustre_term) =>
   pure (i, t, l)
@@ -472,20 +453,8 @@ def parseEq : TSyntax `lustre_eq → MacroM (Ident × Term × TSyntax `lustre_te
   return (i, ←`(term| _), l)
 | _ => Macro.throwUnsupported
 
-#check OmegaCompletePartialOrder.ContinuousHom.fix.unfold
-#check congrFun
-
 macro_rules
-| `(command| defnode $name_ident:ident $b₁:explicitBinders : $O := $out:lustre_term where $eqs:lustre_eq*) => do
-  let Syntax.ident _ _ name _ := name_ident.raw | Macro.throwUnsupported
-  let name_out := mkIdent (.str name "out")
-  let name_eqs := mkIdent (.str name "eqs")
-  let name_fix := mkIdent (.str name "fix")
-  let name_ind := mkIdent (.str name "ind")
-  let name_fold := mkIdent (.str name "unfold")
-  let name_post := mkIdent (.str name "post")
-  let name_eval := mkIdent (.str name "eval")
-
+| `(command| defnode $name_ident:ident $b₁:explicitBinders := $out:lustre_term where $eqs:lustre_eq*) => do
   let empty : Term ← `(term| _)
 
   have inputs := (λ (i, t) => (i, Option.getD t empty)) <$> (← parseBinders b₁)
@@ -498,13 +467,14 @@ macro_rules
   have locals_type := (λ (_, type, _) => type) <$> locals
   have locals_term := (λ (_, _, expr) => expr) <$> locals
 
-  let I ← prodOfList inputs_type
-  let L ← prodOfList locals_type
-
-  have toTerm ir := IR.toTerm inputs_type.length locals_type.length ir
-
   have output_ir := (←parse_term out).compile inputs_name locals_name
-  let output_term ← `(show $I × $L →𝒄 _ from $(←toTerm output_ir))
+  let output_term ←
+    `(show
+        $(←prodOfList inputs_type) × $(←prodOfList locals_type) →𝒄 _
+      from
+        $(←output_ir.toTerm inputs_type.length locals_type.length)
+    )
+
 
   let locals_ir ←
     List.mapM (λ eq => do
@@ -513,67 +483,29 @@ macro_rules
 
   let locals_term ←
     List.mapM (λ ir => do
-      `(show $I × $L →𝒄 _ from $(←toTerm ir))
+      `(show
+          $(←prodOfList inputs_type) × $(←prodOfList locals_type) →𝒄 _
+        from
+          $(←ir.toTerm inputs_type.length locals_type.length)
+      )
     ) locals_ir
 
-  `(
-    def $name_out : $I × $L →𝒄 $O := $output_term
-    def $name_eqs : $I × $L →𝒄 $L := $(←prodNarith locals_term)
-    noncomputable def $name_fix : $I →𝒄 $L :=
-      OmegaCompletePartialOrder.ContinuousHom.comp
-        OmegaCompletePartialOrder.ContinuousHom.fix
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs)
-
-    def $name_fold (i: $I) :
-      $name_fix i = $name_eqs (i, $name_fix i) :=
-      OmegaCompletePartialOrder.ContinuousHom.fix.unfold
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs i)
-
-
-    noncomputable def $name_eval : $I →𝒄 $O :=
-      OmegaCompletePartialOrder.ContinuousHom.comp
-        $name_out
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.prod
-          OmegaCompletePartialOrder.ContinuousHom.id
-          $name_fix)
-
-    -- prove that a property is an invariant
-    def $name_ind (Pre: Admissible $I) (Inv: Admissible $L) :
-      (∀ i l, i ∈ Pre → l ∈ Inv → $name_eqs (i, l) ∈ Inv) → ∀ (i: $I), i ∈ Pre → $name_fix i ∈ Inv :=
-      OmegaCompletePartialOrder.Admissible.NodeFix_thm
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs)
-        Pre Inv
-
-    def $name_post (Pre: Admissible $I) (Inv: Admissible $L) (Post: Admissible $O) :
-      (∀ i l, i ∈ Pre → l ∈ Inv → $name_out (i, l) ∈ Post) → (∀ i, i ∈ Pre → $name_fix i ∈ Inv) →
-      ∀ i, i ∈ Pre → $name_eval i ∈ Post :=
-      λ h₁ h₂ i h₃ => h₁ i ($name_fix i) h₃ (h₂ i h₃)
+  `(command|
+    def $name_ident := $output_term
   )
 
-defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
+defnode foo (i: Kahn ℕ) := l₁
   where
-    l₁ : Kahn ℕ := {ContinuousHom.Kahn.fby}({Kahn.const 1}, l₁)
+    l₁ : Kahn ℕ := i
 
--- from I × L to O
-#print foo.out
+#print foo
 
--- from I × L to L
-#print foo.eqs
 
--- from I to L
-#print foo.fix
 
--- from I to O
-#print foo.eval
-
--- induction principe
-#check foo.ind
-
--- extract a post condition from an invariant
-#check foo.post
-
--- unfold the fix function
-#check foo.unfold
+variable (I₁ I₂ I₃ L₁ L₂ L₃: Type)
+variable (foo : Kahn L₁ →𝒄 Kahn I₁ →𝒄 Kahn I₂ →𝒄 Unit)
+open ContinuousHom in
+#check λˡᵘˢᵗʳᵉ i₁ i₂ i₃ => l₁ l₂ l₃ => {foo}(l₁, i₂, i₁)
 
 end Ast
 
