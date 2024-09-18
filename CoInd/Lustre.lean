@@ -259,7 +259,22 @@ def Square.coind {α: Type u} (P: Set α) (hyp: Kahn α → Prop) :
   apply h₁
   apply h₂
 
+/-
+  Lustre nodes are made of
+  - A list of inputs variables
+  - A list of locals variables
+  - An expression to compute each local variable in function of the context (input+local variables)
+  - An expression to compute the output of the node in function of the context (input+local variables)
 
+  For each expression `f` we generate
+  - A continuous function `f` of type I × L →𝒄 O with I := I₁ × (I₂ × ...) the type of the `n` input variables
+    and L := L₁ × (L₂ × ...) the type of the `m` local variables
+  - A proof `f_apply` of ∀ (i₁: I₁) ... (iₙ: Iₙ) (l₁: L₁) ... (lₘ: Lₘ), f ((i₁, ..., iₙ), (l₁, ... lₘ)) = f_expr
+    with `f_expr` a simplified version of `f` (without the proof of continuity), this proof is done by reflexivity
+
+  In addition we generate `f_fix` the fixed-point of each equations (replacing the arguments by I instead of I × L) by
+  computing the fixed-point of the local variables
+-/
 open Lean Elab Meta in
 inductive Ast : Type where
 | ident : Ident → Ast
@@ -271,11 +286,8 @@ namespace Ast
 
 open Lean Elab Meta
 
-structure Node where
-  inputs : List (Ident × Term)       -- input variables
-  outputs : List (Ast × Term)        -- output variables and their definitions
-  locals : List (Ident × Term × Ast) -- local variables and their recursive definitions
-
+-- internal representation of lustre nodes:
+-- us de Bruijn index
 inductive IR where
 | showFrom : IR → Term → IR
 | term : Term → IR -- term antiquotation
@@ -321,21 +333,58 @@ partial def parseBinders (explicitBinders: Syntax) : MacroM (List (Ident × Opti
   else
     Macro.throwError "unexpected explicit binder"
 
+
+declare_syntax_cat tupleBinder
+declare_syntax_cat tupleBinders
+
+-- As lustre nodes use curryfication to represent their arguments,
+-- binders are represented as tuples of variables
+syntax binderIdent : tupleBinder
+syntax binderIdent ":" term : tupleBinder
+syntax "(" tupleBinder,* ")" : tupleBinders
+
+def parseTupleBinder : TSyntax `tupleBinder → MacroM (Ident × Term)
+| `(tupleBinder| _) => do
+  return (mkIdent `_ , ←`(term| _))
+| `(tupleBinder| $i:ident) => do
+  return (i, ←`(term| _))
+| `(tupleBinder| _ : $t:term) => do
+  return (mkIdent `_ , t)
+| `(tupleBinder| $i:ident : $t:term) => do
+  return (i, t)
+| _ =>
+  Macro.throwError "unexpected binder"
+
+-- parse a tuple of binders
+def parseTupleBinders : TSyntax `tupleBinders → MacroM (List (Ident × Term))
+| `(tupleBinders| ( $b:tupleBinder,* )) => do
+  have b : Array (TSyntax `tupleBinder) := b
+  List.mapM parseTupleBinder b.toList
+| _ =>
+  Macro.throwError "unexpected binder"
+
 declare_syntax_cat lustre_term
-declare_syntax_cat lustre_decl
 declare_syntax_cat lustre_eq
 
 syntax ident : lustre_term -- used to determine arguments and antiquotation
 syntax "(" lustre_term ")" : lustre_term
 syntax "(" lustre_term " : " term ")" : lustre_term
 syntax "{" term "}" : lustre_term -- antiquotation
+
+-- currified function application: the term must be of type
+-- A₁ × (A₂ × ...) →𝒄 O
 syntax "{" term "}" "(" lustre_term,* ")" : lustre_term -- function application
+syntax ident "(" lustre_term,* ")" : lustre_term -- function application
 
 syntax ident ":" term ":=" lustre_term : lustre_eq
+
+-- in practice implicit type may not work because of typeclass instance inference:
+-- top level metavariable instance inference generate errors
 syntax ident ":=" lustre_term : lustre_eq
 
-syntax "defnode" ident explicitBinders ":" term ":=" lustre_term "where" lustre_eq+ : command
+syntax "defnode" ident tupleBinders ":" term ":=" lustre_term "where" lustre_eq+ : command
 
+-- proof that Ast and IR are not empty, used by partial functions
 instance : Inhabited Ast := ⟨.ident (mkIdent `_)⟩
 instance : Inhabited IR := ⟨.term (mkIdent `_)⟩
 
@@ -349,15 +398,50 @@ partial def parse_term : TSyntax `lustre_term → MacroM Ast
   have t₂: Array (TSyntax `lustre_term) := t₂
   let t₂: List Ast ← List.mapM parse_term t₂.toList
   return .app t₁ t₂
+| `(lustre_term| $t₁:ident ($t₂:lustre_term,*))  => do
+  have t₂: Array (TSyntax `lustre_term) := t₂
+  let t₂: List Ast ← List.mapM parse_term t₂.toList
+  return .app t₁ t₂
 | _ => Macro.throwError "unsupported syntax"
+
+-- lift a lustre_term as a term by removing the proof of continuity
+partial def lift_term : TSyntax `lustre_term → MacroM Term
+| `(lustre_term| $i:ident) => `(term| $i)
+| `(lustre_term| {$t:term}) => pure t
+| `(lustre_term| ($t:lustre_term)) => lift_term t
+| `(lustre_term| ($t₁:lustre_term : $t₂:term)) => do
+  `(term| show $t₂ from $(←lift_term t₁))
+| `(lustre_term| {$t₁: term}($t₂:lustre_term,*)) => do
+  have t₂: Array (TSyntax `lustre_term) := t₂
+  let t₂ : List Term ← List.mapM lift_term t₂.toList
+  `($t₁ $(←go t₂))
+| `(lustre_term| $t₁:ident($t₂:lustre_term,*)) => do
+  have t₂: Array (TSyntax `lustre_term) := t₂
+  let t₂ : List Term ← List.mapM lift_term t₂.toList
+  `($t₁ $(←go t₂))
+| _ => Macro.throwError "unsupported syntax"
+where
+  go : List Term → MacroM Term
+  | x :: y :: ys => do
+    `(($x, $(←go (y :: ys))))
+  | [x] => pure x
+  | [] =>
+    Macro.throwError "unsupported syntax"
+
+def List.last : List α → Option α
+| _ :: y :: ys => last (y :: ys)
+| [x] => .some x
+| [] => .none
+
+#check List.findIdx
 
 -- replace idents by De Bruijn index
 partial def compile (inputs: List Ident) (locals: List Ident) : Ast → IR
 | .ident name =>
-  if let idx :: _ := List.findIdxs (λ n => n == name) locals
+  if let .some idx := List.last (List.indexesOf name locals)
   then .loc idx
   else
-    if let idx :: _ := List.findIdxs (λ n => n == name) inputs
+    if let .some idx := List.last (List.indexesOf name inputs)
     then .input idx
     else .term name
 | .app function args =>
@@ -420,24 +504,25 @@ partial def IR.toTerm (numInputs numLocals: Nat) : IR → MacroM Term
 | .app function args => do
   -- A list of terms of type I × L →𝒄 Tᵢ
   let args ← List.mapM (toTerm numInputs numLocals) args
-  let function ←
-    Nat.foldM
-      (λ _ t => `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.curry.symm $t))
-      function (args.length - 1)
   -- function is of type T₀ × ... × Tₙ →𝒄 T
-  -- return a term of type I × L →𝒄 T
+  -- args_fun is of type I × L →𝒄 T₀ × ... × Tₙ
+  let args_fun ← genArgs args
 
-  -- we want a term of type I × L →𝒄 T₀ × ... × Tₙ : construct the arguments from the context
-  let args_fun ← genArgs (List.reverse args)
+  -- so function.comp args_fun has type I × L →𝒄 T
   `(term| OmegaCompletePartialOrder.ContinuousHom.comp $function $args_fun)
 where
   genArgs : List Term → MacroM Term
   | [] => Macro.throwError "empty function application"
   | [t] => pure t
   | x :: xs => do
-    `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.prod $(←genArgs xs) $x)
+    `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.prod $x $(←genArgs xs))
 
 syntax "λˡᵘˢᵗʳᵉ" explicitBinders "=>" explicitBinders "=>" lustre_term : term
+
+-- defcont foo (i₁: I₁) ... (iₙ: Iₙ) => (l₁: L₁) ... (lₙ: Lₙ) : type := t generate two functions:
+-- - A function foo of type, all the type must be explicit because lean cannot assume that
+--   a metavariable in a declaration is an instance of the OmegaCompletePartialOrder typeclass
+syntax "defcont" ident tupleBinders tupleBinders ":" term ":=" lustre_term : command
 
 def prodOfList : List Term → MacroM Term
 | [] => Macro.throwError ""
@@ -465,6 +550,37 @@ macro_rules
   ) <$> l₂
   `(term| show $(←prodOfList l₁_type) × $(←prodOfList l₂_type) →𝒄 _ from $(←ir.toTerm l₁.length l₂.length))
 
+partial def mkProduct : List Ident → MacroM Term
+| x :: y :: ys => do `(term|($x, $(←mkProduct (y :: ys))))
+| [x] => pure x
+| [] => `(term|())
+
+partial def mkForall : List Ident → List Term → Term → MacroM Term
+| x :: xs, y :: ys, out => do
+  match y with
+  | `(term| _) =>
+    `(∀ $x, $(←mkForall xs ys out))
+  | _ =>
+    `(∀ ($x : $y), $(←mkForall xs ys out))
+| _, _, t => pure t
+
+structure Binders where
+  idents : List Ident
+  types  : List Term
+
+def Binders.parse : TSyntax `tupleBinders → MacroM Binders := λ b => do
+  let list ← parseTupleBinders b
+  return ⟨Prod.fst <$> list, Prod.snd <$> list⟩
+
+structure Equations where
+  idents : List Ident
+  types : List Term
+  eqs : List (TSyntax `lustre_term)
+
+def Equations.binders (eqs: Equations) : Binders where
+  idents := eqs.idents
+  types := eqs.types
+
 def parseEq : TSyntax `lustre_eq → MacroM (Ident × Term × TSyntax `lustre_term)
 | `(lustre_eq| $i:ident : $t:term := $l:lustre_term) =>
   pure (i, t, l)
@@ -472,83 +588,127 @@ def parseEq : TSyntax `lustre_eq → MacroM (Ident × Term × TSyntax `lustre_te
   return (i, ←`(term| _), l)
 | _ => Macro.throwUnsupported
 
-#check OmegaCompletePartialOrder.ContinuousHom.fix.unfold
-#check congrFun
+def Equations.parse : List (TSyntax `lustre_eq) → MacroM Equations := λ eqs => do
+  let eqs ← List.mapM parseEq eqs
+  let idents := (λ ⟨id, _, _⟩ => id) <$> eqs
+  let types := (λ ⟨_, t, _⟩ => t) <$> eqs
+  let eqs := (λ ⟨_, _, eq⟩ => eq) <$> eqs
+  return ⟨idents, types, eqs⟩
+
+def Ident.addSuffix (i: Ident) (suffix: String) : MacroM Ident := do
+  let Syntax.ident _ _ (.str name last_string) _ := i.raw | Macro.throwUnsupported
+  return mkIdent (.str name (last_string ++ suffix))
+
+def Ident.addPrefix (i: Ident) (pref: String) : MacroM Ident := do
+  let Syntax.ident _ _ (.str name last_string) _ := i.raw | Macro.throwUnsupported
+  return mkIdent (.str name (pref ++ last_string))
+
+def Ident.addNamespace (i: Ident) (str: String) : MacroM Ident := do
+  let Syntax.ident _ _ name _ := i.raw | Macro.throwUnsupported
+  return mkIdent (.str name str)
 
 macro_rules
-| `(command| defnode $name_ident:ident $b₁:explicitBinders : $O := $out:lustre_term where $eqs:lustre_eq*) => do
-  let Syntax.ident _ _ name _ := name_ident.raw | Macro.throwUnsupported
-  let name_out := mkIdent (.str name "out")
-  let name_eqs := mkIdent (.str name "eqs")
-  let name_fix := mkIdent (.str name "fix")
-  let name_ind := mkIdent (.str name "ind")
-  let name_fold := mkIdent (.str name "unfold")
-  let name_post := mkIdent (.str name "post")
-  let name_eval := mkIdent (.str name "eval")
-
-  let empty : Term ← `(term| _)
-
-  have inputs := (λ (i, t) => (i, Option.getD t empty)) <$> (← parseBinders b₁)
-  let locals ← List.mapM parseEq eqs.toList
-
-  have inputs_name := (λ (name, _) => name) <$> inputs
-  have inputs_type := (λ (_, type) => type) <$> inputs
-
-  have locals_name := (λ (name, _, _) => name) <$> locals
-  have locals_type := (λ (_, type, _) => type) <$> locals
-  have locals_term := (λ (_, _, expr) => expr) <$> locals
-
-  let I ← prodOfList inputs_type
-  let L ← prodOfList locals_type
-
-  have toTerm ir := IR.toTerm inputs_type.length locals_type.length ir
-
-  have output_ir := (←parse_term out).compile inputs_name locals_name
-  let output_term ← `(show $I × $L →𝒄 _ from $(←toTerm output_ir))
-
-  let locals_ir ←
-    List.mapM (λ eq => do
-      return (←parse_term eq).compile inputs_name locals_name
-    ) locals_term
-
-  let locals_term ←
-    List.mapM (λ ir => do
-      `(show $I × $L →𝒄 _ from $(←toTerm ir))
-    ) locals_ir
-
+| `(command| defcont $name_ident:ident $inputs:tupleBinders $locals:tupleBinders : $O:term := $body:lustre_term) => do
+  have body : TSyntax `lustre_term := .mk <| ← expandMacros body
+  let name_apply ← Ident.addSuffix name_ident "_apply"
+  let inputs ← Binders.parse inputs
+  let locals ← Binders.parse locals
+  let ast ← parse_term body
+  let ir := ast.compile inputs.idents locals.idents
+  let I ← prodOfList inputs.types
+  let L ← prodOfList locals.types
+  let i ← mkProduct inputs.idents
+  let l ← mkProduct locals.idents
+  let thm_body : Term ← `($name_ident ($i, $l) = $(←lift_term body))
+  let thm ← mkForall inputs.idents inputs.types (←mkForall locals.idents locals.types thm_body)
   `(
-    def $name_out : $I × $L →𝒄 $O := $output_term
-    def $name_eqs : $I × $L →𝒄 $L := $(←prodNarith locals_term)
-    noncomputable def $name_fix : $I →𝒄 $L :=
-      OmegaCompletePartialOrder.ContinuousHom.comp
-        OmegaCompletePartialOrder.ContinuousHom.fix
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs)
-
-    def $name_fold (i: $I) :
-      $name_fix i = $name_eqs (i, $name_fix i) :=
-      OmegaCompletePartialOrder.ContinuousHom.fix.unfold
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs i)
-
-
-    noncomputable def $name_eval : $I →𝒄 $O :=
-      OmegaCompletePartialOrder.ContinuousHom.comp
-        $name_out
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.prod
-          OmegaCompletePartialOrder.ContinuousHom.id
-          $name_fix)
-
-    -- prove that a property is an invariant
-    def $name_ind (Pre: Admissible $I) (Inv: Admissible $L) :
-      (∀ i l, i ∈ Pre → l ∈ Inv → $name_eqs (i, l) ∈ Inv) → ∀ (i: $I), i ∈ Pre → $name_fix i ∈ Inv :=
-      OmegaCompletePartialOrder.Admissible.NodeFix_thm
-        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs)
-        Pre Inv
-
-    def $name_post (Pre: Admissible $I) (Inv: Admissible $L) (Post: Admissible $O) :
-      (∀ i l, i ∈ Pre → l ∈ Inv → $name_out (i, l) ∈ Post) → (∀ i, i ∈ Pre → $name_fix i ∈ Inv) →
-      ∀ i, i ∈ Pre → $name_eval i ∈ Post :=
-      λ h₁ h₂ i h₃ => h₁ i ($name_fix i) h₃ (h₂ i h₃)
+    def $name_ident : $I × $L →𝒄 $O :=
+      $(←ir.toTerm inputs.idents.length locals.idents.length)
+    @[simp] def $name_apply : $thm := by intros; rfl
   )
+
+open ContinuousHom.Kahn Kahn in
+defcont foo (x : Kahn Int, y: Kahn Int) (z: Kahn Int, t: Kahn Int) : Kahn Int :=
+  fby({const 0}, x)
+
+#print foo
+#check foo_apply
+
+
+-- macro_rules
+-- | `(command| defnode $name_ident:ident $b₁:explicitBinders : $O := $out:lustre_term where $eqs:lustre_eq*) => do
+--   let Syntax.ident _ _ name _ := name_ident.raw | Macro.throwUnsupported
+--   let name_out := mkIdent (.str name "out")
+--   let name_eqs := mkIdent (.str name "eqs")
+--   let name_fix := mkIdent (.str name "fix")
+--   let name_ind := mkIdent (.str name "ind")
+--   let name_fold := mkIdent (.str name "unfold")
+--   let name_post := mkIdent (.str name "post")
+--   let name_eval := mkIdent (.str name "eval")
+--
+--   let empty : Term ← `(term| _)
+--
+--   have inputs := (λ (i, t) => (i, Option.getD t empty)) <$> (← parseBinders b₁)
+--   let locals ← List.mapM parseEq eqs.toList
+--
+--   have inputs_name := (λ (name, _) => name) <$> inputs
+--   have inputs_type := (λ (_, type) => type) <$> inputs
+--
+--   have locals_name := (λ (name, _, _) => name) <$> locals
+--   have locals_type := (λ (_, type, _) => type) <$> locals
+--   have locals_term := (λ (_, _, expr) => expr) <$> locals
+--
+--   let I ← prodOfList inputs_type
+--   let L ← prodOfList locals_type
+--
+--   have toTerm ir := IR.toTerm inputs_type.length locals_type.length ir
+--
+--   have output_ir := (←parse_term out).compile inputs_name locals_name
+--   let output_term ← `(show $I × $L →𝒄 _ from $(←toTerm output_ir))
+--
+--   let locals_ir ←
+--     List.mapM (λ eq => do
+--       return (←parse_term eq).compile inputs_name locals_name
+--     ) locals_term
+--
+--   let locals_term ←
+--     List.mapM (λ ir => do
+--       `(show $I × $L →𝒄 _ from $(←toTerm ir))
+--     ) locals_ir
+--
+--   `(
+--     def $name_out : $I × $L →𝒄 $O := $output_term
+--     def $name_eqs : $I × $L →𝒄 $L := $(←prodNarith locals_term)
+--     noncomputable def $name_fix : $I →𝒄 $L :=
+--       OmegaCompletePartialOrder.ContinuousHom.comp
+--         OmegaCompletePartialOrder.ContinuousHom.fix
+--         (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs)
+--
+--     def $name_fold (i: $I) :
+--       $name_fix i = $name_eqs (i, $name_fix i) :=
+--       OmegaCompletePartialOrder.ContinuousHom.fix.unfold
+--         (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs i)
+--
+--
+--     noncomputable def $name_eval : $I →𝒄 $O :=
+--       OmegaCompletePartialOrder.ContinuousHom.comp
+--         $name_out
+--         (OmegaCompletePartialOrder.ContinuousHom.Prod.prod
+--           OmegaCompletePartialOrder.ContinuousHom.id
+--           $name_fix)
+--
+--     -- prove that a property is an invariant
+--     def $name_ind (Pre: Admissible $I) (Inv: Admissible $L) :
+--       (∀ i l, i ∈ Pre → l ∈ Inv → $name_eqs (i, l) ∈ Inv) → ∀ (i: $I), i ∈ Pre → $name_fix i ∈ Inv :=
+--       OmegaCompletePartialOrder.Admissible.NodeFix_thm
+--         (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $name_eqs)
+--         Pre Inv
+--
+--     def $name_post (Pre: Admissible $I) (Inv: Admissible $L) (Post: Admissible $O) :
+--       (∀ i l, i ∈ Pre → l ∈ Inv → $name_out (i, l) ∈ Post) → (∀ i, i ∈ Pre → $name_fix i ∈ Inv) →
+--       ∀ i, i ∈ Pre → $name_eval i ∈ Post :=
+--       λ h₁ h₂ i h₃ => h₁ i ($name_fix i) h₃ (h₂ i h₃)
+--   )
 
 defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
   where

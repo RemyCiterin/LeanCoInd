@@ -1063,12 +1063,10 @@ def Kahn.tup.continuous {α : Type u} {β: Type v} :
 
 @[simps! apply]
 def OmegaCompletePartialOrder.ContinuousHom.Kahn.tup {α: Type u} {β: Type v} :
-  Kahn α →𝒄 Kahn β →𝒄 Kahn (α × β) :=
-  OmegaCompletePartialOrder.ContinuousHom.Prod.curry {
-    toFun := λ (x, y) => _root_.Kahn.tup x y,
-    monotone' := λ _ _ ⟨h₁, h₂⟩ => Kahn.tup.monotone _ _ _ _ h₁ h₂,
-    cont := Kahn.tup.continuous
-  }
+  Kahn α × Kahn β →𝒄 Kahn (α × β) where
+  toFun := λ (x, y) => _root_.Kahn.tup x y
+  monotone' := λ _ _ ⟨h₁, h₂⟩ => Kahn.tup.monotone _ _ _ _ h₁ h₂
+  cont := Kahn.tup.continuous
 
 #check Kahn.ωSup_cons
 
@@ -1142,11 +1140,10 @@ def Kahn.fby.continuous :
       rfl
 
 @[simps! apply]
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.fby : Kahn α →𝒄 Kahn α →𝒄 Kahn α :=
-  OmegaCompletePartialOrder.ContinuousHom.Prod.curry
-    { toFun := λ (x, y) => _root_.Kahn.fby x y
-    , monotone' := λ _ _ ⟨h₁, h₂⟩ => Kahn.fby.monotone _ _ _ _ h₁ h₂
-    , cont := Kahn.fby.continuous}
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.fby : Kahn α × Kahn α →𝒄 Kahn α where
+  toFun := λ (x, y) => _root_.Kahn.fby x y
+  monotone' := λ _ _ ⟨h₁, h₂⟩ => Kahn.fby.monotone _ _ _ _ h₁ h₂
+  cont := Kahn.fby.continuous
 
 def Kahn.map {α: Type u} {β: Type v} (f: α → β) (x: Kahn α) : Kahn β :=
   Kahn.corec (λ x =>
