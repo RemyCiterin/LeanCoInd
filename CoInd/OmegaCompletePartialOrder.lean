@@ -248,6 +248,19 @@ def OmegaCompletePartialOrder.ContinuousHom.fix.unfold
   (f: α →𝒄 α) : fix f = f (fix f) :=
   OrderHom.fix.unfold_cont f
 
+def OmegaCompletePartialOrder.ContinuousHom.fix.least_fp
+  {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
+  (f: α →𝒄 α) (x: α) (h: f x = x) : ContinuousHom.fix f ≤ x := by
+  apply ωSup_le
+  intro n
+  induction n with
+  | zero =>
+    apply bot_le
+  | succ n h₂ =>
+    rw [←h]
+    apply f.monotone
+    apply h₂
+
 namespace OmegaCompletePartialOrder.Chain
 variable {α: Type u} [OmegaCompletePartialOrder α]
 
