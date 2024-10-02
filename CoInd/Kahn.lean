@@ -113,6 +113,7 @@ def Kahn.F.mk.inj (k k': F α (Kahn α)) :
 instance : Bot (Kahn α) where
   bot := Kahn.F.bot.mk
 
+
 def Kahn.cons (x: α) (xs: Kahn α) : Kahn α := (F.cons x xs).mk
 
 infixr:67 " ::: " => Kahn.cons
@@ -422,6 +423,10 @@ instance : Preorder (Kahn α) where
 def Kahn.bot_le (x: Kahn α) : ⊥ ≤ x := by
   rw [le.unfold]
   apply leF.bot rfl
+
+instance {α: Type u} : OrderBot (Kahn α) where
+  bot_le := Kahn.bot_le
+
 
 def Kahn.le_bot (x: Kahn α) : x ≤ ⊥ → x = ⊥ := by
   intro h
@@ -1236,3 +1241,134 @@ def Kahn.const.unfold (x: α) : const x = (x ::: const x) := by
     rw [corec.unfold]
     rfl
   rfl
+
+
+-- Addition of kahn networks
+instance {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] : HAdd (Kahn α) (Kahn β) (Kahn γ) where
+  hAdd k₁ k₂ := Kahn.map (Function.uncurry HAdd.hAdd) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.add.unfold_bot_left {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] (x: Kahn β) :
+  (⊥ : Kahn α) + x = ⊥ := by simp [HAdd.hAdd]
+
+@[simp] def Kahn.add.unfold_bot_right {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] (x: Kahn α) :
+  x + (⊥ : Kahn β) = ⊥ := by simp [HAdd.hAdd]
+
+@[simp] def Kahn.add.unfold_cons {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x ::: xs) + (y ::: ys) = (x + y) ::: (xs + ys) := by simp [HAdd.hAdd]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.add {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] : Kahn α × Kahn β →𝒄 Kahn γ :=
+  (ContinuousHom.Kahn.map (Function.uncurry HAdd.hAdd)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.add_apply  {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ]
+  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.add (x, y) = x + y := rfl
+
+
+
+
+-- Substraction of kahn networks
+instance {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] : HSub (Kahn α) (Kahn β) (Kahn γ) where
+  hSub k₁ k₂ := Kahn.map (Function.uncurry HSub.hSub) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.sub.unfold_bot_left {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] (x: Kahn β) :
+  (⊥ : Kahn α) - x = ⊥ := by simp [HSub.hSub]
+
+@[simp] def Kahn.sub.unfold_bot_right {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] (x: Kahn α) :
+  x - (⊥ : Kahn β) = ⊥ := by simp [HSub.hSub]
+
+@[simp] def Kahn.sub.unfold_cons {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x ::: xs) - (y ::: ys) = (x - y) ::: (xs - ys) := by simp [HSub.hSub]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.sub {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] : Kahn α × Kahn β →𝒄 Kahn γ :=
+  (ContinuousHom.Kahn.map (Function.uncurry HSub.hSub)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.sub_apply  {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ]
+  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.sub (x, y) = x - y := rfl
+
+
+
+
+
+-- Multiplication of kahn networks
+instance {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] : HMul (Kahn α) (Kahn β) (Kahn γ) where
+  hMul k₁ k₂ := Kahn.map (Function.uncurry HMul.hMul) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.mul.unfold_bot_left {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] (x: Kahn β) :
+  (⊥ : Kahn α) * x = ⊥ := by simp [HMul.hMul]
+
+@[simp] def Kahn.mul.unfold_bot_right {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] (x: Kahn α) :
+  x * (⊥ : Kahn β) = ⊥ := by simp [HMul.hMul]
+
+@[simp] def Kahn.mul.unfold_cons {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x ::: xs) * (y ::: ys) = (x * y) ::: (xs * ys) := by simp [HMul.hMul]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.mul {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] : Kahn α × Kahn β →𝒄 Kahn γ :=
+  (ContinuousHom.Kahn.map (Function.uncurry HMul.hMul)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mul_apply  {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ]
+  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.mul (x, y) = x * y := rfl
+
+
+
+-- Division of kahn networks
+instance {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] : HDiv (Kahn α) (Kahn β) (Kahn γ) where
+  hDiv k₁ k₂ := Kahn.map (Function.uncurry HDiv.hDiv) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.div.unfold_bot_left {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] (x: Kahn β) :
+  (⊥ : Kahn α) / x = ⊥ := by simp [HDiv.hDiv]
+
+@[simp] def Kahn.div.unfold_bot_right {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] (x: Kahn α) :
+  x / (⊥ : Kahn β) = ⊥ := by simp [HDiv.hDiv]
+
+@[simp] def Kahn.div.unfold_cons {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x ::: xs) / (y ::: ys) = (x / y) ::: (xs / ys) := by simp [HDiv.hDiv]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.div {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] : Kahn α × Kahn β →𝒄 Kahn γ :=
+  (ContinuousHom.Kahn.map (Function.uncurry HDiv.hDiv)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.div_apply  {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ]
+  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.div (x, y) = x / y := rfl
+
+
+
+-- Modular arithmetic over kahn networks
+instance {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] : HMod (Kahn α) (Kahn β) (Kahn γ) where
+  hMod k₁ k₂ := Kahn.map (Function.uncurry HMod.hMod) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.mod.unfold_bot_left {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] (x: Kahn β) :
+  (⊥ : Kahn α) % x = ⊥ := by simp [HMod.hMod]
+
+@[simp] def Kahn.mod.unfold_bot_right {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] (x: Kahn α) :
+  x % (⊥ : Kahn β) = ⊥ := by simp [HMod.hMod]
+
+@[simp] def Kahn.mod.unfold_cons {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x ::: xs) % (y ::: ys) = (x % y) ::: (xs % ys) := by simp [HMod.hMod]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.mod {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] : Kahn α × Kahn β →𝒄 Kahn γ :=
+  (ContinuousHom.Kahn.map (Function.uncurry HMod.hMod)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mod_apply  {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ]
+  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.mod (x, y) = x % y := rfl
+
+
+-- Defintion of mux (if then else operators) over kahn networks
+def Kahn.mux (x: Kahn Bool) (y z: Kahn α) : Kahn α :=
+  Kahn.map (λ ⟨a, b, c⟩ => if a then b else c) (Kahn.tup x (Kahn.tup y z))
+
+@[simp] def Kahn.mux.unfold_bot_cond (y z: Kahn α) : Kahn.mux ⊥ y z = ⊥ := by simp [Kahn.mux]
+
+@[simp] def Kahn.mux.unfold_bot_left (x: Kahn Bool) (z: Kahn α) : Kahn.mux x ⊥ z = ⊥ := by simp [Kahn.mux]
+
+@[simp] def Kahn.mux.unfold_bot_right (x: Kahn Bool) (y: Kahn α) : Kahn.mux x y ⊥ = ⊥ := by simp [Kahn.mux]
+
+@[simp] def Kahn.mux.unfold_cons (x: Bool) (y z: α) (xs: Kahn Bool) (ys zs: Kahn α) : Kahn.mux (x ::: xs) (y ::: ys) (z ::: zs) =
+  (if x then y else z) ::: (xs.mux ys zs) := by simp [Kahn.mux]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux : Kahn Bool × Kahn α × Kahn α →𝒄 Kahn α :=
+  (ContinuousHom.Kahn.map (λ ⟨a, b, c⟩ => if a then b else c)).comp (
+    ContinuousHom.Kahn.tup.comp (ContinuousHom.Prod.prod
+      ContinuousHom.Prod.fst
+      (ContinuousHom.Kahn.tup.comp ContinuousHom.Prod.snd)
+    ))
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux_apply (x: Kahn Bool) (y z: Kahn α) :
+  ContinuousHom.Kahn.mux (x, y, z) = x.mux y z := rfl

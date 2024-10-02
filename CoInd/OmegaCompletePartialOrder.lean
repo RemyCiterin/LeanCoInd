@@ -7,6 +7,12 @@ import CoInd.Tactic
 
 open OmegaCompletePartialOrder
 
+instance {I: Type u} {α: I → Type v} [∀ i, Preorder (α i)] [∀ i, OrderBot (α i)]
+  : OrderBot (∀ i, α i) where
+  bot_le := by
+    intro f x
+    apply bot_le
+
 
 @[simp] def OrderHom.mk_apply {α: Type u} {β: Type v} [Preorder α] [Preorder β]
   (f: α → β) (hf: Monotone f) (x: α) : (OrderHom.mk f hf) x = f x := rfl
@@ -307,237 +313,12 @@ def OmegaCompletePartialOrder.IsAdmissible {α: Type u} [OmegaCompletePartialOrd
   ∀ (c: Chain α), (∀ n, S (c n)) → S (ωSup c)
 
 structure OmegaCompletePartialOrder.Admissible
-  (α: Type u) [OmegaCompletePartialOrder α] [OrderBot α] where
+  (α: Type u) [OmegaCompletePartialOrder α] where
   toSet : Set α
   admissible': IsAdmissible toSet
-  contain_bot: ⊥ ∈ toSet
 
 attribute [coe] Admissible.toSet
 
-namespace OmegaCompletePartialOrder.Admissible
-variable {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
-
-instance instFunLike : FunLike (Admissible α) α Prop where
-  coe := toSet
-  coe_injective' := by
-    intro a b h₁
-    cases a
-    cases b
-    rw [Admissible.mk.injEq]
-    exact h₁
-
-instance : CoeFun (Admissible α) fun _ => α → Prop := ⟨toSet⟩
-
-instance : Membership α (Admissible α) :=
-  ⟨λ x s => s x⟩
-
-@[refinment_type] def admissible (p: Admissible α) (c: Chain α) :
-  (∀ n, c n ∈ p) → ωSup c ∈ p := p.admissible' c
-
--- Conjunction of two properties
-def And (lhs rhs: Admissible α) : Admissible α where
-  toSet x := x ∈ lhs ∧ x ∈ rhs
-
-  admissible' := by
-    intro c h₁
-    constructor
-    · apply lhs.admissible'
-      intro n
-      specialize h₁ n
-      exact h₁.left
-    · apply rhs.admissible'
-      intro n
-      specialize h₁ n
-      exact h₁.right
-
-  contain_bot := by
-    constructor
-    · exact lhs.contain_bot
-    · exact rhs.contain_bot
-
-@[refinment_type] def And.intro (lhs rhs: Admissible α) (x: α) :
-  x ∈ lhs → x ∈ rhs → x ∈ And lhs rhs := by
-  intro a v
-  constructor
-  <;> assumption
-
-def Or.prop (p: Admissible α) (c: Chain α) (n: Nat) (m: Nat) : Prop := p (c (n+m))
-
-/-
-Define an increasing and injective sequence such that if `p` hold infinitly many times
-in `c`, then `p` hold for each elements of `sequence p c`
--/
-noncomputable def Or.sequence (p: Admissible α) (c: Chain α) : Nat → Nat
-| n+1 =>
-  let m := sequence p c n
-  (m+1) + Classical.epsilon (prop p c (m + 1))
-| 0 => Classical.epsilon (prop p c 0)
-
-theorem Or.sequence.strict_mono' (p: Admissible α) (c: Chain α) (n: ℕ) :
-  sequence p c n < sequence p c (n+1) := by
-  rw [sequence]
-  simp_arith
-
-theorem Or.sequence.strict_mono (p: Admissible α) (c: Chain α) (n m: ℕ) (h₁: n < m) :
-  sequence p c n < sequence p c m := by
-  induction h₁ with
-  | refl =>
-    apply strict_mono'
-  | step _ h₂ =>
-    apply h₂.trans
-    apply strict_mono'
-
-theorem Or.sequence.inj (p: Admissible α) (c: Chain α) : Function.Injective (sequence p c) := by
-  intro a b h₁
-  cases Nat.le_or_le a b with
-  | inl h₂ =>
-    cases le_iff_lt_or_eq.mp h₂ with
-    | inl h₃ =>
-      have := strict_mono p c a b h₃
-      rw [h₁] at this
-      simp at this
-    | inr h₃ =>
-      assumption
-  | inr h₂ =>
-    cases le_iff_lt_or_eq.mp h₂ with
-    | inl h₃ =>
-      have := strict_mono p c b a h₃
-      rw [h₁] at this
-      simp at this
-    | inr h₃ =>
-      cases h₃
-      rfl
-
-noncomputable def Or.sequence' (p: Admissible α) (c: Chain α) : ℕ →o ℕ where
-  toFun := sequence p c
-  monotone' := by
-    intro a b h₁
-    induction h₁ with
-    | refl =>
-      apply le_refl
-    | step _ h₂ =>
-      apply h₂.trans
-      simp only [sequence]
-      linarith
-
-#print OrderHom.comp
-
-#check Classical.epsilon_spec
-
-def Or.sequence_spec (p: Admissible α) (c: Chain α) :
-  (∀ n, ∃ m, p (c (n + m))) → ∀ n, p (c.filter (Or.sequence' p c) n) := by
-  intro h₁ n
-  cases n with
-  | zero =>
-    conv =>
-      rhs
-      rw [Chain.filter, OrderHom.comp, OrderHom.coe_mk, Function.comp_apply]
-      rw [sequence', OrderHom.coe_mk, sequence]
-      rw [←Nat.zero_add (Classical.epsilon (prop p c 0))]
-      unfold prop
-
-    apply @Classical.epsilon_spec _ (λ m => p (c (0 + m)))
-    specialize h₁ 0
-    assumption
-  | succ m =>
-    simp only [Chain.filter, sequence', sequence, prop]
-    apply @Classical.epsilon_spec _ (λ m' => p <| c <| sequence p c m + 1 + m')
-    apply h₁
-
-def Or.pigeonhole (p q: Admissible α) (c: Chain α) (h₁: ∀ n, p (c n) ∨ q (c n)) :
-  (∀ n, ∃ m, p (c (n+m))) ∨ (∀ n, ∃ m, q (c (n+m))) := by
-  by_cases h:(∀ n, ∃ m, p (c (n+m)))
-  · apply Or.inl h
-  · apply Or.inr
-    intro n
-    conv at h =>
-      rw [not_forall]
-      rhs; intro k
-      rw [not_exists]
-      rfl
-    have ⟨k, h⟩ := h
-    specialize h n
-    rw [add_comm] at h
-    specialize h₁ (n+k)
-    exists k
-    simp only [h, false_or] at h₁
-    assumption
-
-/- Disjunction of two admissible properties -/
-def Or (lhs rhs: Admissible α) : Admissible α where
-  toSet x := x ∈ lhs ∨ x ∈ rhs
-
-  contain_bot := by
-    apply Or.inl
-    exact lhs.contain_bot
-
-  admissible' := by
-    intro c h₁
-
-    let lhsS := Or.sequence' lhs c
-    let rhsS := Or.sequence' rhs c
-    let lhsC := c.filter lhsS
-    let rhsC := c.filter rhsS
-    have lhsI : ωSup lhsC = ωSup c := Chain.ωSup_filter_inj c lhsS (Or.sequence.inj _ _)
-    have rhsI : ωSup rhsC = ωSup c := Chain.ωSup_filter_inj c rhsS (Or.sequence.inj _ _)
-    conv =>
-      congr
-      . rw [←lhsI]
-      . rw [←rhsI]
-    cases Or.pigeonhole lhs rhs c h₁ with
-    | inl h₂ =>
-      apply Or.inl
-      apply lhs.admissible'
-      apply Or.sequence_spec lhs c h₂
-    | inr h₂ =>
-      apply Or.inr
-      apply rhs.admissible'
-      apply Or.sequence_spec rhs c h₂
-
-
-def Forall {β: Sort v} (p: β → Admissible α) : Admissible α where
-  toSet x := ∀ y, x ∈ p y
-  contain_bot := by
-    intro y
-    apply (p y).contain_bot
-  admissible' := by
-    intro c h₁ y
-    apply (p y).admissible'
-    intro n
-    apply h₁
-
-@[refinment_type] def Forall.intro {β: Sort v} (p: β → Admissible α) (x: α) :
-  (∀ y, x ∈ p y) → x ∈ Forall p := λ h => h
-
-@[refinment_type] def contain_bot' (p: Admissible α) : ⊥ ∈ p := p.contain_bot
-
--- If a proposition `p` is admissible then if is enough to show that `p` is stable
--- by `f` to show that `Fix f` ensure `p`
-@[refinment_type] def Fix_thm (p: Admissible α) (f: α →o α) (IsInv: ∀ x, x ∈ p → f x ∈ p) : OrderHom.fix f ∈ p := by
-  apply p.admissible' (OrderHom.fix.iter f)
-  intro n
-  induction n with
-  | zero =>
-    apply p.contain_bot
-  | succ n h₁ =>
-    exact IsInv (OrderHom.fix.iter f n) h₁
-
-@[refinment_type] def FixCont_thm (p: Admissible α) (f: α →𝒄 α) (IsInv: ∀ x, x ∈ p → f x ∈ p) : ContinuousHom.fix f ∈ p :=
-  Fix_thm p f IsInv
-
--- prove that a "lustre node" verify a property if this property is inductive
-def NodeFix_thm {β: Type v}
-  [OmegaCompletePartialOrder β] [OrderBot β]
-  (node_eqs: α →𝒄 β →𝒄 β)
-  (p: Admissible α) (q: Admissible β)
-  (IsInv: ∀ x y, x ∈ p → y ∈ q → node_eqs x y ∈ q)
-  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q := by
-  apply Fix_thm
-  intro y h₂
-  apply IsInv <;> assumption
-
-
-end OmegaCompletePartialOrder.Admissible
 
 
 namespace OmegaCompletePartialOrder.ContinuousHom.Prod
@@ -669,6 +450,299 @@ def mk : α →𝒄 β →𝒄 α × β :=
   curry id
 
 end OmegaCompletePartialOrder.ContinuousHom.Prod
+
+namespace OmegaCompletePartialOrder.Admissible
+variable {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α]
+
+instance instFunLike : FunLike (Admissible α) α Prop where
+  coe := toSet
+  coe_injective' := by
+    intro a b h₁
+    cases a
+    cases b
+    rw [Admissible.mk.injEq]
+    exact h₁
+
+instance : CoeFun (Admissible α) fun _ => α → Prop := ⟨toSet⟩
+
+instance : Membership α (Admissible α) :=
+  ⟨λ x s => s x⟩
+
+instance : Coe (Admissible α) (Set α) where
+  coe p := λ x => p x
+
+@[refinment_type] def admissible (p: Admissible α) (c: Chain α) :
+  (∀ n, c n ∈ p) → ωSup c ∈ p := p.admissible' c
+
+-- Conjunction of two properties
+def And (lhs rhs: Admissible α) : Admissible α where
+  toSet x := x ∈ lhs ∧ x ∈ rhs
+
+  admissible' := by
+    intro c h₁
+    constructor
+    · apply lhs.admissible'
+      intro n
+      specialize h₁ n
+      exact h₁.left
+    · apply rhs.admissible'
+      intro n
+      specialize h₁ n
+      exact h₁.right
+
+@[refinment_type] def And.intro (lhs rhs: Admissible α) (x: α) :
+  x ∈ lhs → x ∈ rhs → x ∈ And lhs rhs := by
+  intro a v
+  constructor
+  <;> assumption
+
+def Or.prop (p: Admissible α) (c: Chain α) (n: Nat) (m: Nat) : Prop := p (c (n+m))
+
+/-
+Define an increasing and injective sequence such that if `p` hold infinitly many times
+in `c`, then `p` hold for each elements of `sequence p c`
+-/
+noncomputable def Or.sequence (p: Admissible α) (c: Chain α) : Nat → Nat
+| n+1 =>
+  let m := sequence p c n
+  (m+1) + Classical.epsilon (prop p c (m + 1))
+| 0 => Classical.epsilon (prop p c 0)
+
+theorem Or.sequence.strict_mono' (p: Admissible α) (c: Chain α) (n: ℕ) :
+  sequence p c n < sequence p c (n+1) := by
+  rw [sequence]
+  simp_arith
+
+theorem Or.sequence.strict_mono (p: Admissible α) (c: Chain α) (n m: ℕ) (h₁: n < m) :
+  sequence p c n < sequence p c m := by
+  induction h₁ with
+  | refl =>
+    apply strict_mono'
+  | step _ h₂ =>
+    apply h₂.trans
+    apply strict_mono'
+
+theorem Or.sequence.inj (p: Admissible α) (c: Chain α) : Function.Injective (sequence p c) := by
+  intro a b h₁
+  cases Nat.le_or_le a b with
+  | inl h₂ =>
+    cases le_iff_lt_or_eq.mp h₂ with
+    | inl h₃ =>
+      have := strict_mono p c a b h₃
+      rw [h₁] at this
+      simp at this
+    | inr h₃ =>
+      assumption
+  | inr h₂ =>
+    cases le_iff_lt_or_eq.mp h₂ with
+    | inl h₃ =>
+      have := strict_mono p c b a h₃
+      rw [h₁] at this
+      simp at this
+    | inr h₃ =>
+      cases h₃
+      rfl
+
+noncomputable def Or.sequence' (p: Admissible α) (c: Chain α) : ℕ →o ℕ where
+  toFun := sequence p c
+  monotone' := by
+    intro a b h₁
+    induction h₁ with
+    | refl =>
+      apply le_refl
+    | step _ h₂ =>
+      apply h₂.trans
+      simp only [sequence]
+      linarith
+
+#print OrderHom.comp
+
+#check Classical.epsilon_spec
+
+def Or.sequence_spec (p: Admissible α) (c: Chain α) :
+  (∀ n, ∃ m, p (c (n + m))) → ∀ n, p (c.filter (Or.sequence' p c) n) := by
+  intro h₁ n
+  cases n with
+  | zero =>
+    conv =>
+      rhs
+      rw [Chain.filter, OrderHom.comp, OrderHom.coe_mk, Function.comp_apply]
+      rw [sequence', OrderHom.coe_mk, sequence]
+      rw [←Nat.zero_add (Classical.epsilon (prop p c 0))]
+      unfold prop
+
+    apply @Classical.epsilon_spec _ (λ m => p (c (0 + m)))
+    specialize h₁ 0
+    assumption
+  | succ m =>
+    simp only [Chain.filter, sequence', sequence, prop]
+    apply @Classical.epsilon_spec _ (λ m' => p <| c <| sequence p c m + 1 + m')
+    apply h₁
+
+def Or.pigeonhole (p q: Admissible α) (c: Chain α) (h₁: ∀ n, p (c n) ∨ q (c n)) :
+  (∀ n, ∃ m, p (c (n+m))) ∨ (∀ n, ∃ m, q (c (n+m))) := by
+  by_cases h:(∀ n, ∃ m, p (c (n+m)))
+  · apply Or.inl h
+  · apply Or.inr
+    intro n
+    conv at h =>
+      rw [not_forall]
+      rhs; intro k
+      rw [not_exists]
+      rfl
+    have ⟨k, h⟩ := h
+    specialize h n
+    rw [add_comm] at h
+    specialize h₁ (n+k)
+    exists k
+    simp only [h, false_or] at h₁
+    assumption
+
+/- Disjunction of two admissible properties -/
+def Or (lhs rhs: Admissible α) : Admissible α where
+  toSet x := x ∈ lhs ∨ x ∈ rhs
+
+  admissible' := by
+    intro c h₁
+
+    let lhsS := Or.sequence' lhs c
+    let rhsS := Or.sequence' rhs c
+    let lhsC := c.filter lhsS
+    let rhsC := c.filter rhsS
+    have lhsI : ωSup lhsC = ωSup c := Chain.ωSup_filter_inj c lhsS (Or.sequence.inj _ _)
+    have rhsI : ωSup rhsC = ωSup c := Chain.ωSup_filter_inj c rhsS (Or.sequence.inj _ _)
+    conv =>
+      congr
+      . rw [←lhsI]
+      . rw [←rhsI]
+    cases Or.pigeonhole lhs rhs c h₁ with
+    | inl h₂ =>
+      apply Or.inl
+      apply lhs.admissible'
+      apply Or.sequence_spec lhs c h₂
+    | inr h₂ =>
+      apply Or.inr
+      apply rhs.admissible'
+      apply Or.sequence_spec rhs c h₂
+
+
+def Forall {β: Sort v} (p: β → Admissible α) : Admissible α where
+  toSet x := ∀ y, x ∈ p y
+  admissible' := by
+    intro c h₁ y
+    apply (p y).admissible'
+    intro n
+    apply h₁
+
+@[refinment_type] def Forall.intro {β: Sort v} (p: β → Admissible α) (x: α) :
+  (∀ y, x ∈ p y) → x ∈ Forall p := λ h => h
+
+
+instance {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α] : Top (Admissible α) where
+  top :=
+    ⟨
+      λ _ => True,
+      by intro _ _; trivial,
+    ⟩
+
+-- using a function from (x: α) to a set of admissible property over (β x), construct
+-- an admissible property over ((x: α) → β x)
+def foreach {α: Type u} {β: α → Type v} [∀ x, OmegaCompletePartialOrder (β x)] [∀ x, OrderBot (β x)]
+  (P : ∀ x, Admissible (β x)) : Admissible (∀ x, β x) where
+  toSet f := ∀ x, f x ∈ P x
+  admissible' := by
+    intro chain h₁ x
+    apply admissible
+    intro n
+    apply h₁
+
+@[refinment_type]
+def foreach.apply {α: Type u} {β: α → Type v} [∀ x, OmegaCompletePartialOrder (β x)] [∀ x, OrderBot (β x)]
+  (P : ∀ x, Admissible (β x)) (f: ∀ x, β x) (hyp: ∀ x, f x ∈ P x) : f ∈ foreach P := hyp
+
+def prod {α: Type u} {β: Type v}
+  [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
+  (P: Admissible α) (Q: Admissible β) : Admissible (α × β) where
+  toSet pair := pair.fst ∈ P ∧ pair.snd ∈ Q
+  admissible' := by
+    intro chain h₁
+    constructor
+    · apply admissible
+      intro n
+      apply (h₁ n).left
+    · apply admissible
+      intro n
+      apply (h₁ n).right
+
+@[refinment_type]
+def prod.apply {α: Type u} {β: Type v}
+  [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
+  (P: Admissible α) (Q: Admissible β) (a: α) (b: β) (h₁: a ∈ P) (h₂: b ∈ Q) : (a, b) ∈ prod P Q :=
+  ⟨h₁, h₂⟩
+
+-- If a proposition `p` is admissible then if is enough to show that `p` is stable
+-- by `f` to show that `Fix f` ensure `p`
+@[refinment_type] def Fix_thm (p: Admissible α) (f: α →o α) (IsInv: ∀ x, x ∈ p → f x ∈ p) (containBot: ⊥ ∈ p) : OrderHom.fix f ∈ p := by
+  apply p.admissible' (OrderHom.fix.iter f)
+  intro n
+  induction n with
+  | zero =>
+    apply containBot
+  | succ n h₁ =>
+    exact IsInv (OrderHom.fix.iter f n) h₁
+
+@[refinment_type] def FixCont_thm (p: Admissible α) (f: α →𝒄 α) (IsInv: ∀ x, x ∈ p → f x ∈ p) (containBot: ⊥ ∈ p) : ContinuousHom.fix f ∈ p :=
+  Fix_thm p f IsInv containBot
+
+-- prove that a "lustre node" verify a property if this property is inductive
+def NodeFix_thm {β: Type v}
+  [OmegaCompletePartialOrder β] [OrderBot β]
+  (node_eqs: α →𝒄 β →𝒄 β)
+  (p: Set α) (q: Admissible β)
+  (IsInv: ∀ x y, x ∈ p → y ∈ q → node_eqs x y ∈ q)
+  (containBot: ⊥ ∈ q)
+  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q := by
+  apply Fix_thm
+  intro y h₂
+  apply IsInv <;> assumption
+  assumption
+
+#check Fix_thm
+#check ContinuousHom.Prod.curry
+#check ContinuousHom.fix.unfold
+
+-- Prove that a lustre node verify an invariant that may depend of the input of the node
+def NodeFix_thm2 {β: Type v}
+  [OmegaCompletePartialOrder β] [OrderBot β]
+  (node_eqs: α →𝒄 β →𝒄 β)
+  (p: Set α) (q: α → Admissible β)
+  (IsInv: ∀ x y, x ∈ p → y ∈ q x → node_eqs x y ∈ q x)
+  (containBot: ∀ x, ⊥ ∈ q x)
+  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q x := by
+  apply (q x).admissible
+  intro n; induction n with
+  | zero =>
+    apply containBot x
+  | succ n h₂ =>
+    apply IsInv x _ h₁ h₂
+
+-- Prove that a lustre node verify an invariant that may depend of the input of the node
+-- and it's precondition
+def NodeFix_thm3 {β: Type v}
+  [OmegaCompletePartialOrder β] [OrderBot β]
+  (node_eqs: α →𝒄 β →𝒄 β)
+  (p: Set α) (q: {x: α} → p x → Admissible β)
+  (IsInv: ∀ x y (h: x ∈ p), y ∈ q h → node_eqs x y ∈ q h)
+  (containBot: ∀ x (h: x ∈ p), ⊥ ∈ q h)
+  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q h₁ := by
+  apply (q h₁).admissible
+  intro n; induction n with
+  | zero =>
+    apply containBot _ h₁
+  | succ n h₂ =>
+    apply IsInv x _ h₁ h₂
+
+end OmegaCompletePartialOrder.Admissible
 
 namespace OmegaCompletePartialOrder.ContinuousHom.Sum
 variable {α: Type u} [OmegaCompletePartialOrder α]
