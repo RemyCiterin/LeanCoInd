@@ -18,6 +18,7 @@ import Lean.Data.RBMap
 import Lean.Data.RBTree
 import Qq
 import CoInd.Kahn
+import CoInd.Admissible
 
 
 open OmegaCompletePartialOrder
@@ -111,6 +112,7 @@ syntax ident ":" term ":=" lustre_term : lustre_eq
 syntax ident ":=" lustre_term : lustre_eq
 
 syntax "defnode" ident tupleBinders ":" term ":=" lustre_term "where" lustre_eq+ : command
+syntax "defnode" ident ":" term ":=" lustre_term "where" lustre_eq+ : command
 syntax "defnode" ident tupleBinders ":" term ":=" lustre_term : command
 
 -- proof that Ast and IR are not empty, used by partial functions
@@ -414,6 +416,12 @@ def compileFixFn (I L: Term) (fix_name eqs_name: Ident) : MacroM <| TSyntax `com
            (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $eqs_name)
     )
 
+def compileFixFnWithoutInputs (L: Term) (fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
+    `(command|
+      noncomputable def $fix_name : $L :=
+        OmegaCompletePartialOrder.ContinuousHom.fix $eqs_name
+    )
+
 def compileEvalFn (I O: Term) (name out_name fix_name: Ident) : MacroM <| TSyntax `command := do
   `(command|
     noncomputable def $name : $I →𝒄 $O :=
@@ -424,12 +432,25 @@ def compileEvalFn (I O: Term) (name out_name fix_name: Ident) : MacroM <| TSynta
          $fix_name)
   )
 
+def compileEvalFnWithoutInputs (O: Term) (name out_name fix_name: Ident) : MacroM <| TSyntax `command := do
+  `(command|
+    noncomputable def $name : $O :=
+      $out_name $fix_name
+  )
+
 def compileUnfoldFn (I: Term) (unfold_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
   `(command|
    def $unfold_name (i: $I) :
      $fix_name i = $eqs_name (i, $fix_name i) :=
      OmegaCompletePartialOrder.ContinuousHom.fix.unfold
        (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $eqs_name i)
+  )
+
+def compileUnfoldFnWithoutInputs (unfold_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
+  `(command|
+   def $unfold_name :
+     $fix_name = $eqs_name $fix_name :=
+     OmegaCompletePartialOrder.ContinuousHom.fix.unfold $eqs_name
   )
 
 def compileLfpThm (I L: Term) (lfp_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
@@ -441,6 +462,15 @@ def compileLfpThm (I L: Term) (lfp_name fix_name eqs_name: Ident) : MacroM <| TS
        x
   )
 
+def compileLfpThmWithoutInputs (L: Term) (lfp_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
+  `(command|
+   def $lfp_name (x: $L) :
+     $eqs_name x = x → $fix_name ≤ x :=
+     OmegaCompletePartialOrder.ContinuousHom.fix.least_fp
+      $eqs_name
+      x
+  )
+
 def compileIndThm (I L: Term) (ind_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
   `(command|
     def $ind_name (Pre: Set $I) (Inv: $I → Admissible $L) :
@@ -450,14 +480,12 @@ def compileIndThm (I L: Term) (ind_name fix_name eqs_name: Ident) : MacroM <| TS
         Pre Inv
   )
 
-def compilePostThm (I L O: Term) (post_name name out_name fix_name: Ident) : MacroM <| TSyntax `command := do
+def compileIndThmWithoutInputs (L: Term) (ind_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
   `(command|
-     def $post_name (Pre: Set $I) (Inv: Set $L) (Post: Set $O) :
-       (∀ i l, i ∈ Pre → l ∈ Inv → $out_name (i, l) ∈ Post) → (∀ i, i ∈ Pre → $fix_name i ∈ Inv) →
-       ∀ i, i ∈ Pre → $name i ∈ Post :=
-       λ h₁ h₂ i h₃ => h₁ i ($fix_name i) h₃ (h₂ i h₃)
+    def $ind_name (Inv: Admissible $L) :
+      (∀ l, l ∈ Inv → $eqs_name l ∈ Inv) → ⊥ ∈ Inv → $fix_name ∈ Inv :=
+        OmegaCompletePartialOrder.Admissible.Fix_thm Inv $eqs_name
   )
-
 
 def compileNodeWithoutLocals (name: Ident) (inputs: Binders) (O: Term) (out: TSyntax `lustre_term) : MacroM (TSyntax `command) := do
   compileCont name [inputs] O out
@@ -492,7 +520,6 @@ def compileNode (name: Ident) (inputs: Binders) (O: Term) (out: TSyntax `lustre_
   let lfp_decl ← compileLfpThm I L lfp_name fix_name eqs_name
   -- induction theorem
   let induction_decl ← compileIndThm I L induction_name fix_name eqs_name
-  let post_decl ← compilePostThm I L O post_name name out_name fix_name
 
   return concatCmds [
     ←compileCont out_name [inputs, locals] O out,
@@ -503,7 +530,52 @@ def compileNode (name: Ident) (inputs: Binders) (O: Term) (out: TSyntax `lustre_
     unfold_decl,
     lfp_decl,
     induction_decl,
-    post_decl
+  ]
+where
+  gen_node_eqs : List Ident → MacroM Term
+  | [x] => `($x)
+  | x :: y :: ys => do
+    `(OmegaCompletePartialOrder.ContinuousHom.Prod.prod $x $(←gen_node_eqs (y :: ys)))
+  | [] => Macro.throwUnsupported
+
+-- This version assume that their is at least one equation and one input variable
+def compileNodeWithoutInputs (name: Ident) (O: Term) (out: TSyntax `lustre_term) (eqs: Equations) : MacroM (TSyntax `command) := do
+  have locals := eqs.binders
+  let out_name ← Ident.addSuffix name "_out"
+  let eqs_name ← Ident.addSuffix name "_eqs"
+  let fix_name ← Ident.addSuffix name "_fix"
+  let lfp_name ← Ident.addNamespace fix_name "lfp"
+  let unfold_name ← Ident.addNamespace fix_name "unfold"
+  let induction_name ← Ident.addSuffix name "_induction"
+
+  let L ← prodOfList locals.types
+
+  let local_names ← List.mapM Ident.getUniqStr eqs.idents
+  let local_idents ← List.mapM (Ident.addNamespace name) local_names
+  -- I generate a continuous function and a simplification theorem for each local variable
+  let local_cmds : TSyntax `command := concatCmds (←compileEqs name ⟨[], []⟩ locals eqs)
+  -- generate the product of all the local variables, used for fixed point computation
+  let local_decl ←
+    `(command| def $eqs_name : $L →𝒄 $L := $(←gen_node_eqs local_idents))
+  -- comput the fixed point of the local variables equations
+  let fix_decl ← compileFixFnWithoutInputs L fix_name eqs_name
+  -- compute the output in function of the inputs using fix fixed point of the local variables
+  let decl ← compileEvalFnWithoutInputs O name out_name fix_name
+  -- unfold the fixed point of the local variables
+  let unfold_decl ← compileUnfoldFnWithoutInputs unfold_name fix_name eqs_name
+  let lfp_decl ← compileLfpThmWithoutInputs L lfp_name fix_name eqs_name
+  -- induction theorem
+  let induction_decl ← compileIndThmWithoutInputs L induction_name fix_name eqs_name
+
+  return concatCmds [
+    ←compileCont out_name [locals] O out,
+    local_cmds,
+    local_decl,
+    fix_decl,
+    decl,
+    unfold_decl,
+    lfp_decl,
+    induction_decl,
   ]
 where
   gen_node_eqs : List Ident → MacroM Term
@@ -516,15 +588,18 @@ macro_rules
 | `(command| defnode $name:ident $b₁:tupleBinders : $O := $out:lustre_term) => do
   let inputs ← Binders.parse b₁
   compileNodeWithoutLocals name inputs O out
+| `(command| defnode $name:ident : $O := $out:lustre_term where $eqs:lustre_eq*) => do
+  let eqs ← Equations.parse eqs.toList
+  compileNodeWithoutInputs name O out eqs
 | `(command| defnode $name:ident $b₁:tupleBinders : $O := $out:lustre_term where $eqs:lustre_eq*) => do
   let inputs ← Binders.parse b₁
   let eqs ← Equations.parse eqs.toList
   compileNode name inputs O out eqs
 
+
 defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
   where
     l₁ : Kahn ℕ := {ContinuousHom.Kahn.fby}({Kahn.const 1}, l₁)
-    l₂ : Kahn ℕ := {ContinuousHom.Kahn.fby}({Kahn.const 2}, i₁)
 
 -- from I × L to O
 #print foo_out
@@ -532,9 +607,6 @@ defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
 
 #print foo.l₁
 #check foo.l₁_apply
-
-#print foo.l₂
-#check foo.l₂_apply
 
 #print foo_eqs
 #print foo_fix
@@ -544,12 +616,52 @@ defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
 #print foo
 
 #check foo_induction
-#check foo_post
 
-defnode bar (i₁: Kahn ℕ) : Kahn ℕ := i₁
+defcont foo.inv => (i₁: Kahn ℕ) (l₁: Kahn ℕ) : Kahn Prop := {ContinuousHom.Kahn.map (λ n => n ≥ 1)}(l₁)
+#check foo.inv
+
+example (i₁: Kahn ℕ) : foo_fix i₁ ∈ Square.comp (ContinuousHom.Prod.curry foo.inv i₁) := by
+  apply foo_induction ⊤ λ i => Square.comp (ContinuousHom.Prod.curry foo.inv i)
+  · intro i l h₁ h₂
+    clear h₁ i₁
+    simp? [foo_eqs]
+    rw [Kahn.const.unfold]
+    simp?
+    simp at h₂
+    assumption
+  · intro _
+    simp?
+    refinment_type
+  · simp?
+
+defnode bar : Kahn ℕ := l₁
+  where
+    l₁ : Kahn ℕ := {ContinuousHom.Kahn.fby}({Kahn.const 1}, l₁)
+
+-- from I × L to O
+#print bar_out
+#check bar_out_apply
+
+#print bar.l₁
+#check bar.l₁_apply
+
+#print bar_eqs
+#print bar_fix
+#check bar_fix.unfold
+#check bar_fix.lfp
 
 #print bar
-#check bar_apply
+
+#check bar_induction
+
+defcont bar.inv => (i₁: Kahn ℕ) (l₁: Kahn ℕ) : Kahn Prop := {ContinuousHom.Kahn.map (λ n => n ≥ 1)}(l₁)
+#check foo.inv
+
+
+defnode baz (i₁: Kahn ℕ) : Kahn ℕ := i₁
+
+#print baz
+#check baz_apply
 
 end Ast
 

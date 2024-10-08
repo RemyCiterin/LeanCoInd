@@ -6,14 +6,13 @@ import Mathlib.Tactic.Linarith
 import CoInd.Tactic
 import CoInd.Kahn
 import CoInd.OmegaCompletePartialOrder
-import CoInd.Lustre
 
 open OmegaCompletePartialOrder
 
 -- As admissible functions are just continuous functions to Prop, it is possible to define the composition of
 -- continuous functions and admissible properties. Then one can define an admissible invariant over a lustre
 -- node as the composition of Square and an admissible function from the state of the node to Kahn Prop
-def Admissible.comp {α: Type u} {β: Type v}
+def OmegaCompletePartialOrder.Admissible.comp {α: Type u} {β: Type v}
   [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
   (p: Admissible β) (f: α →𝒄 β) : Admissible α where
   toSet x := f x ∈ p
@@ -22,6 +21,11 @@ def Admissible.comp {α: Type u} {β: Type v}
     rw [f.continuous]
     apply p.admissible
     exact h₁
+
+@[simp] def OmegaCompletePartialOrder.Admissible.comp_apply {α: Type u} {β: Type v}
+  [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
+  (p: Admissible β) (f: α →𝒄 β) (x: α) : (x ∈ comp p f) = (f x ∈ p) := by
+  rfl
 
 inductive Square.SetF
   (aux: Set (Kahn Prop)) (s: Kahn Prop) : Prop where
@@ -107,7 +111,7 @@ noncomputable def Square : Admissible (Kahn Prop) where
 #check pgfp.unfold
 
 @[refinment_type]
-def Square.unfold_cons (x: Prop) (xs: Kahn Prop) :
+def Square.cons (x: Prop) (xs: Kahn Prop) :
   x → xs ∈ Square → x ::: xs ∈ Square := by
   intro h₁ h₂
   simp only [Square, Membership.mem]
@@ -140,7 +144,7 @@ def Square.rewrite_cons (x: Prop) (xs: Kahn Prop) :
     refinment_type
 
 @[refinment_type]
-def Square.unfold_bot :
+def Square.bot :
   ⊥  ∈ Square := by
   simp only [Square, Membership.mem]
   rw [←pgfp.unfold]
