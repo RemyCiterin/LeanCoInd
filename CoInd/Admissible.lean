@@ -15,7 +15,7 @@ open OmegaCompletePartialOrder
 def OmegaCompletePartialOrder.Admissible.comp {α: Type u} {β: Type v}
   [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
   (p: Admissible β) (f: α →𝒄 β) : Admissible α where
-  toSet x := f x ∈ p
+  toSet x := p (f x)
   admissible' := by
     intro chain h₁
     rw [f.continuous]
@@ -24,9 +24,10 @@ def OmegaCompletePartialOrder.Admissible.comp {α: Type u} {β: Type v}
 
 @[simp] def OmegaCompletePartialOrder.Admissible.comp_apply {α: Type u} {β: Type v}
   [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
-  (p: Admissible β) (f: α →𝒄 β) (x: α) : (x ∈ comp p f) = (f x ∈ p) := by
+  (p: Admissible β) (f: α →𝒄 β) (x: α) : (comp p f x) = (p (f x)) := by
   rfl
 
+namespace Kahn
 inductive Square.SetF
   (aux: Set (Kahn Prop)) (s: Kahn Prop) : Prop where
 | bot : ⊥ = s → SetF aux s
@@ -112,7 +113,7 @@ noncomputable def Square : Admissible (Kahn Prop) where
 
 @[refinment_type]
 def Square.cons (x: Prop) (xs: Kahn Prop) :
-  x → xs ∈ Square → x ::: xs ∈ Square := by
+  x → Square xs → Square (x ::: xs) := by
   intro h₁ h₂
   simp only [Square, Membership.mem]
   rw [←pgfp.unfold]
@@ -120,7 +121,7 @@ def Square.cons (x: Prop) (xs: Kahn Prop) :
 
 @[simp]
 def Square.rewrite_cons (x: Prop) (xs: Kahn Prop) :
-  (x ::: xs ∈ Square) = (x ∧ xs ∈ Square) := by
+  Square (x ::: xs) = (x ∧ Square xs) := by
   apply propext
   constructor
   · intro h
@@ -145,28 +146,39 @@ def Square.rewrite_cons (x: Prop) (xs: Kahn Prop) :
 
 @[refinment_type]
 def Square.bot :
-  ⊥  ∈ Square := by
-  simp only [Square, Membership.mem]
+  Square ⊥ := by
+  simp only [Square]
   rw [←pgfp.unfold]
   apply Square.SetF.bot rfl
 
 def Square.coind (hyp: Kahn Prop → Prop) :
-  (∀ x, hyp x → Square.SetF (λ x => hyp x ∨ x ∈ Square) x)
-  → ∀ x, hyp x → x ∈ Square := by
+  (∀ x, hyp x → Square.SetF (λ x => hyp x ∨ Square x) x)
+  → ∀ x, hyp x → Square x := by
   intro h₁ x h₂
   simp only [Membership.mem, Square]
   apply pgfp.theorem _ hyp
   clear h₂ x
   intro x h₂
   specialize h₁ x h₂
-  have : (fun x => hyp x ∨ x ∈ Square) ≤ hyp ⊔ (pgfp SetF_mono) hyp := by
+  have : (fun x => hyp x ∨ Square x) ≤ hyp ⊔ (pgfp SetF_mono) hyp := by
     intro x h₁
     cases h₁ with
     | inl h => apply Or.inl h
     | inr h =>
       apply Or.inr
-      apply (pgfp SetF_mono).monotone bot_le
+      apply (pgfp SetF_mono).monotone (OrderBot.bot_le _)
       exact h
   apply SetF_mono.monotone this
   apply h₁
   apply h₂
+
+
+syntax:max "□" term:max : term
+macro_rules
+| `(□ $t) => `(Square $t)
+
+
+delab_rule Square
+| `($_ $P) => do ``(□ $P)
+
+end Kahn

@@ -465,18 +465,15 @@ instance instFunLike : FunLike (Admissible α) α Prop where
 
 instance : CoeFun (Admissible α) fun _ => α → Prop := ⟨toSet⟩
 
-instance : Membership α (Admissible α) :=
-  ⟨λ x s => s x⟩
-
 instance : Coe (Admissible α) (Set α) where
   coe p := λ x => p x
 
 @[refinment_type] def admissible (p: Admissible α) (c: Chain α) :
-  (∀ n, c n ∈ p) → ωSup c ∈ p := p.admissible' c
+  (∀ n, p (c n)) → p (ωSup c) := p.admissible' c
 
 -- Conjunction of two properties
 def And (lhs rhs: Admissible α) : Admissible α where
-  toSet x := x ∈ lhs ∧ x ∈ rhs
+  toSet x := lhs x ∧ rhs x
 
   admissible' := by
     intro c h₁
@@ -491,7 +488,7 @@ def And (lhs rhs: Admissible α) : Admissible α where
       exact h₁.right
 
 @[refinment_type] def And.intro (lhs rhs: Admissible α) (x: α) :
-  x ∈ lhs → x ∈ rhs → x ∈ And lhs rhs := by
+  lhs x → rhs x → And lhs rhs x := by
   intro a v
   constructor
   <;> assumption
@@ -600,7 +597,7 @@ def Or.pigeonhole (p q: Admissible α) (c: Chain α) (h₁: ∀ n, p (c n) ∨ q
 
 /- Disjunction of two admissible properties -/
 def Or (lhs rhs: Admissible α) : Admissible α where
-  toSet x := x ∈ lhs ∨ x ∈ rhs
+  toSet x := lhs x ∨ rhs x
 
   admissible' := by
     intro c h₁
@@ -627,7 +624,7 @@ def Or (lhs rhs: Admissible α) : Admissible α where
 
 
 def Forall {β: Sort v} (p: β → Admissible α) : Admissible α where
-  toSet x := ∀ y, x ∈ p y
+  toSet x := ∀ y, p y x
   admissible' := by
     intro c h₁ y
     apply (p y).admissible'
@@ -635,7 +632,7 @@ def Forall {β: Sort v} (p: β → Admissible α) : Admissible α where
     apply h₁
 
 @[refinment_type] def Forall.intro {β: Sort v} (p: β → Admissible α) (x: α) :
-  (∀ y, x ∈ p y) → x ∈ Forall p := λ h => h
+  (∀ y, p y x) → Forall p x := λ h => h
 
 
 instance {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α] : Top (Admissible α) where
@@ -649,7 +646,7 @@ instance {α: Type u} [OmegaCompletePartialOrder α] [OrderBot α] : Top (Admiss
 -- an admissible property over ((x: α) → β x)
 def foreach {α: Type u} {β: α → Type v} [∀ x, OmegaCompletePartialOrder (β x)] [∀ x, OrderBot (β x)]
   (P : ∀ x, Admissible (β x)) : Admissible (∀ x, β x) where
-  toSet f := ∀ x, f x ∈ P x
+  toSet f := ∀ x, P x (f x)
   admissible' := by
     intro chain h₁ x
     apply admissible
@@ -658,12 +655,12 @@ def foreach {α: Type u} {β: α → Type v} [∀ x, OmegaCompletePartialOrder (
 
 @[refinment_type]
 def foreach.apply {α: Type u} {β: α → Type v} [∀ x, OmegaCompletePartialOrder (β x)] [∀ x, OrderBot (β x)]
-  (P : ∀ x, Admissible (β x)) (f: ∀ x, β x) (hyp: ∀ x, f x ∈ P x) : f ∈ foreach P := hyp
+  (P : ∀ x, Admissible (β x)) (f: ∀ x, β x) (hyp: ∀ x, P x (f x)) : foreach P f := hyp
 
 def prod {α: Type u} {β: Type v}
   [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
   (P: Admissible α) (Q: Admissible β) : Admissible (α × β) where
-  toSet pair := pair.fst ∈ P ∧ pair.snd ∈ Q
+  toSet pair := P pair.fst ∧ Q pair.snd
   admissible' := by
     intro chain h₁
     constructor
@@ -677,12 +674,12 @@ def prod {α: Type u} {β: Type v}
 @[refinment_type]
 def prod.apply {α: Type u} {β: Type v}
   [OmegaCompletePartialOrder α] [OmegaCompletePartialOrder β] [OrderBot α] [OrderBot β]
-  (P: Admissible α) (Q: Admissible β) (a: α) (b: β) (h₁: a ∈ P) (h₂: b ∈ Q) : (a, b) ∈ prod P Q :=
+  (P: Admissible α) (Q: Admissible β) (a: α) (b: β) (h₁: P a) (h₂: Q b) : prod P Q (a, b) :=
   ⟨h₁, h₂⟩
 
 -- If a proposition `p` is admissible then if is enough to show that `p` is stable
 -- by `f` to show that `Fix f` ensure `p`
-@[refinment_type] def Fix_thm (p: Admissible α) (f: α →o α) (IsInv: ∀ x, x ∈ p → f x ∈ p) (containBot: ⊥ ∈ p) : OrderHom.fix f ∈ p := by
+@[refinment_type] def Fix_thm (p: Admissible α) (f: α →o α) (IsInv: ∀ x, p x → p (f x)) (containBot: p ⊥) : p (OrderHom.fix f) := by
   apply p.admissible' (OrderHom.fix.iter f)
   intro n
   induction n with
@@ -691,7 +688,7 @@ def prod.apply {α: Type u} {β: Type v}
   | succ n h₁ =>
     exact IsInv (OrderHom.fix.iter f n) h₁
 
-@[refinment_type] def FixCont_thm (p: Admissible α) (f: α →𝒄 α) (IsInv: ∀ x, x ∈ p → f x ∈ p) (containBot: ⊥ ∈ p) : ContinuousHom.fix f ∈ p :=
+@[refinment_type] def FixCont_thm (p: Admissible α) (f: α →𝒄 α) (IsInv: ∀ x, p x → p (f x)) (containBot: p ⊥) : p (ContinuousHom.fix f) :=
   Fix_thm p f IsInv containBot
 
 -- prove that a "lustre node" verify a property if this property is inductive
@@ -699,9 +696,9 @@ def NodeFix_thm {β: Type v}
   [OmegaCompletePartialOrder β] [OrderBot β]
   (node_eqs: α →𝒄 β →𝒄 β)
   (p: Set α) (q: Admissible β)
-  (IsInv: ∀ x y, x ∈ p → y ∈ q → node_eqs x y ∈ q)
-  (containBot: ⊥ ∈ q)
-  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q := by
+  (IsInv: ∀ x y, p x → q y → q (node_eqs x y))
+  (containBot: q ⊥)
+  (x: α) (h₁: p x) : q (ContinuousHom.fix.comp node_eqs x) := by
   apply Fix_thm
   intro y h₂
   apply IsInv <;> assumption
@@ -716,9 +713,9 @@ def NodeFix_thm2 {β: Type v}
   [OmegaCompletePartialOrder β] [OrderBot β]
   (node_eqs: α →𝒄 β →𝒄 β)
   (p: Set α) (q: α → Admissible β)
-  (IsInv: ∀ x y, x ∈ p → y ∈ q x → node_eqs x y ∈ q x)
-  (containBot: ∀ x, ⊥ ∈ q x)
-  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q x := by
+  (IsInv: ∀ x y, p x → q x y → q x (node_eqs x y))
+  (containBot: ∀ x, q x ⊥)
+  (x: α) (h₁: p x) : q x (ContinuousHom.fix.comp node_eqs x) := by
   apply (q x).admissible
   intro n; induction n with
   | zero =>
@@ -732,13 +729,43 @@ def NodeFix_thm3 {β: Type v}
   [OmegaCompletePartialOrder β] [OrderBot β]
   (node_eqs: α →𝒄 β →𝒄 β)
   (p: Set α) (q: {x: α} → p x → Admissible β)
-  (IsInv: ∀ x y (h: x ∈ p), y ∈ q h → node_eqs x y ∈ q h)
-  (containBot: ∀ x (h: x ∈ p), ⊥ ∈ q h)
-  (x: α) (h₁: x ∈ p) : ContinuousHom.fix.comp node_eqs x ∈ q h₁ := by
+  (IsInv: ∀ x y (h: x ∈ p), q h y → q h (node_eqs x y))
+  (containBot: ∀ x (h: x ∈ p), q h ⊥)
+  (x: α) (h₁: x ∈ p) : q h₁ (ContinuousHom.fix.comp node_eqs x) := by
   apply (q h₁).admissible
   intro n; induction n with
   | zero =>
     apply containBot _ h₁
+  | succ n h₂ =>
+    apply IsInv x _ h₁ h₂
+
+-- Prove that a lustre node verify an invariant that may depend of the input of the node
+def NodeFix_thm4 {β: Type v}
+  [OmegaCompletePartialOrder β] [OrderBot β]
+  (node_eqs: α →𝒄 β →𝒄 β)
+  (p: Set α) (q: Admissible (α × β))
+  (IsInv: ∀ x y, p x → q (x, y) → q (x, node_eqs x y))
+  (containBot: ∀ x, q (x, ⊥))
+  (x: α) (h₁: p x) : q (x, ContinuousHom.fix.comp node_eqs x) := by
+  have : IsAdmissible (λ y => q (x, y)) := by
+    intro chain h₁
+    let c₁ : Chain α := OrderHom.const Nat x
+    have h₁ : (x, ωSup chain) = ωSup (Chain.zip c₁ chain) := by
+      simp only [ωSup, Prod.ωSup, Prod.mk.injEq]
+      constructor
+      · apply le_antisymm
+        · apply le_ωSup c₁ 0
+        · apply ωSup_le
+          intro i
+          apply le_refl
+      · rfl
+    rw [h₁]
+    apply q.admissible
+    assumption
+  apply this
+  intro n; induction n with
+  | zero =>
+    apply containBot x
   | succ n h₂ =>
     apply IsInv x _ h₁ h₂
 

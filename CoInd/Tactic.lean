@@ -76,7 +76,7 @@ def parseGoal (goal: Expr) (thm: Expr) : MetaM (Expr × List Expr) := do
     let .some (goalFn', exprs) := matchAppN goal args.length | throwError errorMessage
     -- TODO: test if fvars and args are defEq
     if not (←isDefEq goalFn goalFn') then
-      throwError "the goal and the coinduction theorem doesn't match"
+      throwError s!"the goal and the coinduction theorem doesn't match:\n\t{goalFn}\n\t{goalFn'}"
     return (goalFn, exprs)
 
 syntax "coinduction" ("[" (term),* "]")? "generalizing" "[" (term),* "]" "using" term : tactic

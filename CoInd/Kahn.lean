@@ -1350,25 +1350,172 @@ def OmegaCompletePartialOrder.ContinuousHom.Kahn.mod {α: Type u} {β: Type v} {
   (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.mod (x, y) = x % y := rfl
 
 
+
+def Kahn.and : Kahn Prop → Kahn Prop → Kahn Prop := λ k₁ k₂ =>
+  Kahn.map (Function.uncurry And) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.and.unfold_bot_left (x: Kahn Prop) :
+  Kahn.and ⊥ x = ⊥ := by simp [Kahn.and]
+
+@[simp] def Kahn.and.unfold_bot_right (x: Kahn Prop) :
+  Kahn.and x ⊥ = ⊥ := by simp [Kahn.and]
+
+@[simp] def Kahn.and.unfold_cons (x: Prop) (xs: Kahn Prop) (y: Prop) (ys: Kahn Prop) :
+  Kahn.and (x ::: xs) (y ::: ys) = (x ∧ y) ::: Kahn.and xs ys := by simp [Kahn.and]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.and : Kahn Prop × Kahn Prop →𝒄 Kahn Prop :=
+  (ContinuousHom.Kahn.map (Function.uncurry And)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.and_apply (x: Kahn Prop) (y: Kahn Prop) :
+  ContinuousHom.Kahn.and (x, y) = _root_.Kahn.and x y := rfl
+
+
+
+def Kahn.not : Kahn Prop → Kahn Prop := λ k₁ =>
+  Kahn.map Not k₁
+
+@[simp] def Kahn.not.unfold_bot :
+  Kahn.not ⊥ = ⊥ := by simp [Kahn.not]
+
+@[simp] def Kahn.not.unfold_cons (x: Prop) (xs: Kahn Prop) :
+  Kahn.not (x ::: xs) = (¬x) ::: Kahn.not xs := by simp [Kahn.not]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.not : Kahn Prop →𝒄 Kahn Prop :=
+  map Not
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.not_apply (x: Kahn Prop) :
+  ContinuousHom.Kahn.not x = _root_.Kahn.not x := rfl
+
+
+
+
+def Kahn.or : Kahn Prop → Kahn Prop → Kahn Prop := λ k₁ k₂ =>
+  Kahn.map (Function.uncurry Or) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.or.unfold_bot_left (x: Kahn Prop) :
+  Kahn.or ⊥ x = ⊥ := by simp [Kahn.or]
+
+@[simp] def Kahn.or.unfold_bot_right (x: Kahn Prop) :
+  Kahn.or x ⊥ = ⊥ := by simp [Kahn.or]
+
+@[simp] def Kahn.or.unfold_cons (x: Prop) (xs: Kahn Prop) (y: Prop) (ys: Kahn Prop) :
+  Kahn.or (x ::: xs) (y ::: ys) = (x ∨ y) ::: Kahn.or xs ys := by simp [Kahn.or]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.or : Kahn Prop × Kahn Prop →𝒄 Kahn Prop :=
+  (ContinuousHom.Kahn.map (Function.uncurry Or)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.or_apply (x: Kahn Prop) (y: Kahn Prop) :
+  ContinuousHom.Kahn.or (x, y) = _root_.Kahn.or x y := rfl
+
+
+
+
+
+def Kahn.eq : Kahn α → Kahn α → Kahn Prop := λ k₁ k₂ =>
+  Kahn.map (Function.uncurry Eq) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.eq.unfold_bot_left (x: Kahn α) :
+  Kahn.eq ⊥ x = ⊥ := by simp [Kahn.eq]
+
+@[simp] def Kahn.eq.unfold_bot_right (x: Kahn α) :
+  Kahn.eq x ⊥ = ⊥ := by simp [Kahn.eq]
+
+@[simp] def Kahn.eq.unfold_cons (x: α) (xs: Kahn α) (y: α) (ys: Kahn α) :
+  Kahn.eq (x ::: xs) (y ::: ys) = (x = y) ::: Kahn.eq xs ys := by simp [Kahn.eq]
+
+def OmegaCompletePartialeqder.ContinuousHom.Kahn.eq : Kahn α × Kahn α →𝒄 Kahn Prop :=
+  (ContinuousHom.Kahn.map (Function.uncurry Eq)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialeqder.ContinuousHom.Kahn.eq_apply (x: Kahn α) (y: Kahn α) :
+  ContinuousHom.Kahn.eq (x, y) = _root_.Kahn.eq x y := rfl
+
+
+
+
+
+def Kahn.le [LE α] : Kahn α → Kahn α → Kahn Prop := λ k₁ k₂ =>
+  Kahn.map (Function.uncurry LE.le) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.le.unfold_bot_left [LE α] (x: Kahn α) :
+  Kahn.le ⊥ x = ⊥ := by simp [Kahn.le]
+
+@[simp] def Kahn.le.unfold_bot_right [LE α] (x: Kahn α) :
+  Kahn.le x ⊥ = ⊥ := by simp [Kahn.le]
+
+@[simp] def Kahn.le.unfold_cons [LE α] (x: α) (xs: Kahn α) (y: α) (ys: Kahn α) :
+  Kahn.le (x ::: xs) (y ::: ys) = (x ≤ y) ::: Kahn.le xs ys := by simp [Kahn.le]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.le [LE α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
+  (ContinuousHom.Kahn.map (Function.uncurry LE.le)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.le_apply [LE α] (x: Kahn α) (y: Kahn α) :
+  ContinuousHom.Kahn.le (x, y) = _root_.Kahn.le x y := rfl
+
+@[simp] def Kahn.ge [LE α] (x y: Kahn α) := Kahn.le y x
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.ge [LE α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
+  ContinuousHom.Kahn.le.comp (ContinuousHom.Prod.prod ContinuousHom.Prod.snd ContinuousHom.Prod.fst)
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.ge_apply [LE α] (x: Kahn α) (y: Kahn α) :
+  ContinuousHom.Kahn.ge (x, y) = _root_.Kahn.ge x y := rfl
+
+
+
+
+
+def Kahn.lt [LT α] : Kahn α → Kahn α → Kahn Prop := λ k₁ k₂ =>
+  Kahn.map (Function.uncurry LT.lt) (Kahn.tup k₁ k₂)
+
+@[simp] def Kahn.lt.unfold_bot_left [LT α] (x: Kahn α) :
+  Kahn.lt ⊥ x = ⊥ := by simp [Kahn.lt]
+
+@[simp] def Kahn.lt.unfold_bot_right [LT α] (x: Kahn α) :
+  Kahn.lt x ⊥ = ⊥ := by simp [Kahn.lt]
+
+@[simp] def Kahn.lt.unfold_cons [LT α] (x: α) (xs: Kahn α) (y: α) (ys: Kahn α) :
+  Kahn.lt (x ::: xs) (y ::: ys) = (x < y) ::: Kahn.lt xs ys := by simp [Kahn.lt]
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.lt [LT α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
+  (ContinuousHom.Kahn.map (Function.uncurry LT.lt)).comp ContinuousHom.Kahn.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.lt_apply [LT α] (x: Kahn α) (y: Kahn α) :
+  ContinuousHom.Kahn.lt (x, y) = _root_.Kahn.lt x y := rfl
+
+@[simp] def Kahn.gt [LT α] (x y: Kahn α) := Kahn.lt y x
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.gt [LT α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
+  ContinuousHom.Kahn.lt.comp (ContinuousHom.Prod.prod ContinuousHom.Prod.snd ContinuousHom.Prod.fst)
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.gt_apply [LT α] (x: Kahn α) (y: Kahn α) :
+  ContinuousHom.Kahn.gt (x, y) = _root_.Kahn.gt x y := rfl
+
+
+
+
+
+
 -- Defintion of mux (if then else operators) over kahn networks
-def Kahn.mux (x: Kahn Bool) (y z: Kahn α) : Kahn α :=
-  Kahn.map (λ ⟨a, b, c⟩ => if a then b else c) (Kahn.tup x (Kahn.tup y z))
+noncomputable def Kahn.mux (x: Kahn Prop) (y z: Kahn α) : Kahn α :=
+  Kahn.map (λ ⟨a, b, c⟩ => @ite _ a (Classical.propDecidable a) b c) (Kahn.tup x (Kahn.tup y z))
 
 @[simp] def Kahn.mux.unfold_bot_cond (y z: Kahn α) : Kahn.mux ⊥ y z = ⊥ := by simp [Kahn.mux]
 
-@[simp] def Kahn.mux.unfold_bot_left (x: Kahn Bool) (z: Kahn α) : Kahn.mux x ⊥ z = ⊥ := by simp [Kahn.mux]
+@[simp] def Kahn.mux.unfold_bot_left (x: Kahn Prop) (z: Kahn α) : Kahn.mux x ⊥ z = ⊥ := by simp [Kahn.mux]
 
-@[simp] def Kahn.mux.unfold_bot_right (x: Kahn Bool) (y: Kahn α) : Kahn.mux x y ⊥ = ⊥ := by simp [Kahn.mux]
+@[simp] def Kahn.mux.unfold_bot_right (x: Kahn Prop) (y: Kahn α) : Kahn.mux x y ⊥ = ⊥ := by simp [Kahn.mux]
 
-@[simp] def Kahn.mux.unfold_cons (x: Bool) (y z: α) (xs: Kahn Bool) (ys zs: Kahn α) : Kahn.mux (x ::: xs) (y ::: ys) (z ::: zs) =
-  (if x then y else z) ::: (xs.mux ys zs) := by simp [Kahn.mux]
+@[simp] def Kahn.mux.unfold_cons_true (y z: α) (xs: Kahn Prop) (ys zs: Kahn α) : Kahn.mux (True ::: xs) (y ::: ys) (z ::: zs) =
+  y ::: (xs.mux ys zs) := by simp [Kahn.mux]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux : Kahn Bool × Kahn α × Kahn α →𝒄 Kahn α :=
-  (ContinuousHom.Kahn.map (λ ⟨a, b, c⟩ => if a then b else c)).comp (
+@[simp] def Kahn.mux.unfold_cons_false (y z: α) (xs: Kahn Prop) (ys zs: Kahn α) : Kahn.mux (False ::: xs) (y ::: ys) (z ::: zs) =
+  z ::: (xs.mux ys zs) := by simp [Kahn.mux]
+
+noncomputable def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux : Kahn Prop × Kahn α × Kahn α →𝒄 Kahn α :=
+  (ContinuousHom.Kahn.map (λ ⟨a, b, c⟩ => @ite _ a (Classical.propDecidable a) b c)).comp (
     ContinuousHom.Kahn.tup.comp (ContinuousHom.Prod.prod
       ContinuousHom.Prod.fst
       (ContinuousHom.Kahn.tup.comp ContinuousHom.Prod.snd)
     ))
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux_apply (x: Kahn Bool) (y z: Kahn α) :
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux_apply (x: Kahn Prop) (y z: Kahn α) :
   ContinuousHom.Kahn.mux (x, y, z) = x.mux y z := rfl

@@ -92,7 +92,7 @@ def parseTupleBinders : TSyntax `tupleBinders → MacroM (List (Ident × Term))
 | b =>
   Macro.throwError s!"unexpected binder {b}"
 
-declare_syntax_cat lustre_term
+declare_syntax_cat lustre_term (behavior := symbol)
 declare_syntax_cat lustre_eq
 
 syntax ident : lustre_term -- used to determine arguments and antiquotation
@@ -114,6 +114,41 @@ syntax ident ":=" lustre_term : lustre_eq
 syntax "defnode" ident tupleBinders ":" term ":=" lustre_term "where" lustre_eq+ : command
 syntax "defnode" ident ":" term ":=" lustre_term "where" lustre_eq+ : command
 syntax "defnode" ident tupleBinders ":" term ":=" lustre_term : command
+
+syntax:57 "!" lustre_term:75 : lustre_term
+syntax:65 lustre_term "+" lustre_term:66 : lustre_term
+syntax:65 lustre_term "-" lustre_term:66 : lustre_term
+syntax:70 lustre_term "*" lustre_term:71 : lustre_term
+syntax:70 lustre_term "/" lustre_term:71 : lustre_term
+syntax:70 lustre_term "%" lustre_term:71 : lustre_term
+syntax:35 lustre_term "∨" lustre_term:31 : lustre_term
+syntax:30 lustre_term "∧" lustre_term:31 : lustre_term
+syntax:50 lustre_term "=" lustre_term:51 : lustre_term
+syntax:50 lustre_term "≤" lustre_term:51 : lustre_term
+syntax:50 lustre_term "<" lustre_term:51 : lustre_term
+syntax:50 lustre_term "≥" lustre_term:51 : lustre_term
+syntax:50 lustre_term ">" lustre_term:51 : lustre_term
+syntax "(" lustre_term "?" lustre_term ":" lustre_term ")" : lustre_term
+syntax num : lustre_term
+
+macro_rules
+| `(lustre_term| !$x) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.not($x))
+| `(lustre_term| $x + $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.add($x, $y))
+| `(lustre_term| $x - $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.sub($x, $y))
+| `(lustre_term| $x * $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.mul($x, $y))
+| `(lustre_term| $x / $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.div($x, $y))
+| `(lustre_term| $x % $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.mod($x, $y))
+| `(lustre_term| $x ∧ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.and($x, $y))
+| `(lustre_term| $x ∨ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.or($x, $y))
+| `(lustre_term| $x = $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.or($x, $y))
+| `(lustre_term| $x ≤ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.le($x, $y))
+| `(lustre_term| $x < $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.lt($x, $y))
+| `(lustre_term| $x ≥ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.ge($x, $y))
+| `(lustre_term| $x > $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.gt($x, $y))
+| `(lustre_term| ( $x ? $y : $z )) =>
+  `(lustre_term| OmegaCompletePartialOrder.ContinuousHom.Kahn.mux($x, $y, $z))
+| `(lustre_term| $n:num) =>
+  `(lustre_term| {Kahn.const $n})
 
 -- proof that Ast and IR are not empty, used by partial functions
 instance : Inhabited Ast := ⟨.ident (mkIdent `_)⟩
@@ -264,6 +299,11 @@ where
 --   a metavariable in a declaration is an instance of the OmegaCompletePartialOrder typeclass
 syntax "defcont" ident "=>" tupleBinders* ":" term ":=" lustre_term : command
 
+
+-- Allow to define properties as the composition of a continuous function from (I₁₁ × ... × I₁ₙ) × ... × (Iₘ₁ × ... × Iₘₖ) →𝒄 Stream Prop
+-- and Kahn.Square
+syntax "defprop" ident "=>" tupleBinders* ":=" lustre_term : command
+
 def prodOfList : List Term → MacroM Term
 | [] => Macro.throwError ""
 | [x] => pure x
@@ -356,18 +396,43 @@ def compileCont (name_ident: Ident) (inputs: List Binders) (O: Term) (body: TSyn
     @[simp] def $name_apply : $thm := by intros; rfl
   )
 
+-- Compile a continuous function of an arbitrary number of set of arguments and generate a simplification theorem
+def compileProp (name_ident: Ident) (inputs: List Binders) (body: TSyntax `lustre_term) : MacroM (TSyntax `command) := do
+  have body : TSyntax `lustre_term := .mk <| ← expandMacros body
+  let name_apply ← Ident.addSuffix name_ident "_apply"
+  let ast ← parse_term body
+  let ir := ast.compile (List.map (λ x => x.idents) inputs)
+  let I ← prodOfList (←List.mapM (λ x => prodOfList x.types) inputs)
+  let i ← mkProduct (←List.mapM (λ x => mkProduct x.idents) inputs)
+  let thm_body : Term ← `($name_ident $i = □ $(←lift_term body))
+  let thm ← mkForall (List.join (List.map (λ x => x.idents) inputs)) (List.join (List.map (λ x => x.types) inputs)) thm_body
+  `(
+    noncomputable def $name_ident : Admissible $I :=
+      Admissible.comp Kahn.Square $(←ir.toTerm (List.map (λ x => x.idents.length) inputs))
+    @[simp] def $name_apply : $thm := by intros; rfl
+  )
+
 macro_rules
 | `(command| defcont $name_ident:ident => $inputs:tupleBinders* : $O:term := $body:lustre_term) => do
   let inputs : Array (TSyntax `tupleBinders) := inputs
   let inputs : List (TSyntax `tupleBinders) := inputs.toList
   let inputs ← List.mapM Binders.parse inputs
   compileCont name_ident inputs O body
+| `(command| defprop $name_ident:ident => $inputs:tupleBinders* := $body:lustre_term) => do
+  let inputs : Array (TSyntax `tupleBinders) := inputs
+  let inputs : List (TSyntax `tupleBinders) := inputs.toList
+  let inputs ← List.mapM Binders.parse inputs
+  compileProp name_ident inputs body
 
 
 namespace Example
   open ContinuousHom.Kahn Kahn in
   defcont foo => (x : Kahn Int, y: Kahn Int) (z: Kahn Int, t: Kahn Int) : Kahn Int :=
     fby({const 0}, z)
+
+  open ContinuousHom.Kahn Kahn in
+  defprop foo1 => (x : Kahn Int, y: Kahn Int) (z: Kahn Int, t: Kahn Int) :=
+    {ContinuousHom.Kahn.map (λ x => x ≤ 0)}(fby({const 0}, z))
 
   #print foo
   #check foo_apply
@@ -473,9 +538,9 @@ def compileLfpThmWithoutInputs (L: Term) (lfp_name fix_name eqs_name: Ident) : M
 
 def compileIndThm (I L: Term) (ind_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
   `(command|
-    def $ind_name (Pre: Set $I) (Inv: $I → Admissible $L) :
-      (∀ i l, i ∈ Pre → l ∈ Inv i → $eqs_name (i, l) ∈ Inv i) → (∀ i, ⊥ ∈ Inv i) → ∀ (i: $I), i ∈ Pre → $fix_name i ∈ Inv i :=
-      OmegaCompletePartialOrder.Admissible.NodeFix_thm2
+    def $ind_name (Pre: Set $I) (Inv: Admissible ($I × $L)) :
+      (∀ i l, Pre i → Inv (i, l) → Inv (i, $eqs_name (i, l))) → (∀ i, Inv (i, ⊥)) → ∀ (i: $I), Pre i → Inv (i, $fix_name i) :=
+      OmegaCompletePartialOrder.Admissible.NodeFix_thm4
         (OmegaCompletePartialOrder.ContinuousHom.Prod.curry $eqs_name)
         Pre Inv
   )
@@ -483,7 +548,7 @@ def compileIndThm (I L: Term) (ind_name fix_name eqs_name: Ident) : MacroM <| TS
 def compileIndThmWithoutInputs (L: Term) (ind_name fix_name eqs_name: Ident) : MacroM <| TSyntax `command := do
   `(command|
     def $ind_name (Inv: Admissible $L) :
-      (∀ l, l ∈ Inv → $eqs_name l ∈ Inv) → ⊥ ∈ Inv → $fix_name ∈ Inv :=
+      (∀ l, Inv l → Inv ($eqs_name l)) → Inv ⊥ → Inv $fix_name :=
         OmegaCompletePartialOrder.Admissible.Fix_thm Inv $eqs_name
   )
 
@@ -499,7 +564,6 @@ def compileNode (name: Ident) (inputs: Binders) (O: Term) (out: TSyntax `lustre_
   let lfp_name ← Ident.addNamespace fix_name "lfp"
   let unfold_name ← Ident.addNamespace fix_name "unfold"
   let induction_name ← Ident.addSuffix name "_induction"
-  let post_name ← Ident.addSuffix name "_post"
 
   let I ← prodOfList inputs.types
   let L ← prodOfList locals.types
@@ -597,9 +661,18 @@ macro_rules
   compileNode name inputs O out eqs
 
 
+instance : Coe α (Kahn α) where
+  coe := Kahn.const
+
+open ContinuousHom.Kahn in
 defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
   where
-    l₁ : Kahn ℕ := {ContinuousHom.Kahn.fby}({Kahn.const 1}, l₁)
+    l₁ : Kahn ℕ := fby(1, l₁)
+
+-- An example of invariant we want to prove about foo
+defprop foo.inv => (i₁: Kahn ℕ) (l₁: Kahn ℕ) := {ContinuousHom.Kahn.map (λ l => l ≥ 1)}(l₁)
+#print foo.inv
+#check foo.inv_apply
 
 -- from I × L to O
 #print foo_out
@@ -617,22 +690,19 @@ defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
 
 #check foo_induction
 
-defcont foo.inv => (i₁: Kahn ℕ) (l₁: Kahn ℕ) : Kahn Prop := {ContinuousHom.Kahn.map (λ n => n ≥ 1)}(l₁)
-#check foo.inv
 
-example (i₁: Kahn ℕ) : foo_fix i₁ ∈ Square.comp (ContinuousHom.Prod.curry foo.inv i₁) := by
-  apply foo_induction ⊤ λ i => Square.comp (ContinuousHom.Prod.curry foo.inv i)
+example (i₁: Kahn ℕ) : foo.inv (i₁, foo_fix i₁) := by
+  apply foo_induction ⊤ foo.inv
   · intro i l h₁ h₂
     clear h₁ i₁
     simp? [foo_eqs]
     rw [Kahn.const.unfold]
-    simp?
-    simp at h₂
+    simp? [foo.inv]
     assumption
   · intro _
-    simp?
+    simp? [foo.inv]
     refinment_type
-  · simp?
+  · trivial
 
 defnode bar : Kahn ℕ := l₁
   where
@@ -654,7 +724,7 @@ defnode bar : Kahn ℕ := l₁
 
 #check bar_induction
 
-defcont bar.inv => (i₁: Kahn ℕ) (l₁: Kahn ℕ) : Kahn Prop := {ContinuousHom.Kahn.map (λ n => n ≥ 1)}(l₁)
+defcont bar.inv => (l₁: Kahn ℕ) : Kahn Prop := {ContinuousHom.Kahn.map (λ n => n ≥ 1)}(l₁)
 #check foo.inv
 
 
@@ -662,6 +732,63 @@ defnode baz (i₁: Kahn ℕ) : Kahn ℕ := i₁
 
 #print baz
 #check baz_apply
+
+namespace Example
+
+open ContinuousHom.Kahn in
+defnode f : Kahn ℤ := y
+  where
+    x : Kahn ℤ := fby(0, x + y)
+    y : Kahn ℤ := fby(1, x + 1)
+
+open ContinuousHom.Kahn Kahn in
+defprop f.inv_x => (x: Kahn Int, y: Kahn Int) :=
+  0 ≤ x
+
+defprop f.inv_y => (x: Kahn Int, y: Kahn Int) :=
+  0 ≤ y
+
+noncomputable def f.inv := Admissible.And inv_x inv_y
+
+example : f.inv f_fix := by
+  apply f_induction f.inv
+  · intro ⟨x, y⟩ ⟨h₁, h₂⟩
+    simp [f_eqs]
+    conv =>
+      rhs
+      congr
+      · congr
+        · rw [Kahn.const.unfold]
+      · congr
+        · rw [Kahn.const.unfold]
+        · rhs
+          rw [Kahn.const.unfold]
+    simp [f.inv] at h₁ h₂
+    constructor
+    · simp [f.inv_x]
+      coinduction generalizing [x, y] using Kahn.Square.coind
+      clear h₁ h₂ x y
+      intro w ⟨x, y, eq₁, ⟨h₁, h₂⟩⟩
+      induction eq₁
+      simp
+    · simp [f.inv_y]
+      sorry
+  · rw [Bot.bot, Prod.instBot]
+    simp [f.inv, Admissible.And]
+    refinment_type
+
+
+
+-- property y >= 1
+
+#check f.x
+#check f.x_apply
+
+#check f.y
+#check f.y_apply
+
+
+end Example
 
 end Ast
 
