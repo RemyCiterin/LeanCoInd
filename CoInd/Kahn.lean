@@ -373,7 +373,7 @@ instance Kahn.leF.SC : ScottContinuousNat (@Kahn.leF.mono α) where
 
 def Kahn.le.refl (x: Kahn α) : x ≤ x := by
   simp only [LE.le]
-  coinduction generalizing [x] using Kahn.le.coind α; clear x
+  coinduction generalizing [x] using Kahn.le.coind α
   intro a b ⟨x, h₁, h₂, h₃⟩; clear h₃
   induction h₁
   induction h₂
@@ -389,7 +389,6 @@ def Kahn.le.refl (x: Kahn α) : x ≤ x := by
 def Kahn.le.trans (x y z: Kahn α) : x ≤ y → y ≤ z → x ≤ z := by
   intro h₁ h₂
   coinduction generalizing [x, y, z] using Kahn.le.coind α
-  clear x y z h₁ h₂
   intro l r ⟨x, y, z, h₁, h₂, h₃, h₄⟩
   induction h₁
   induction h₂
@@ -546,7 +545,6 @@ theorem Kahn.lub.unfold (f: ℕ →o Kahn α) :
 
 theorem Kahn.lub_le (f: ℕ →o Kahn α)(x: Kahn α) (hyp: ∀ n, f n ≤ x) : lub f ≤ x := by
   coinduction generalizing [f, x] using le.coind α
-  clear hyp f x
   intro a b ⟨f, x, lhs, rhs, hyp⟩
   induction lhs
   induction rhs
@@ -580,7 +578,6 @@ theorem Kahn.lub_le (f: ℕ →o Kahn α)(x: Kahn α) (hyp: ∀ n, f n ≤ x) : 
 
 theorem Kahn.le_lub (f: Nat →o Kahn α) (n: Nat) (X : Kahn α) (hX: X ≤ f n) : X ≤ lub f := by
   coinduction generalizing [X, n, f] using le.coind α
-  clear hX X n f
   intro x y ⟨X, n, f, h₁, h₂, hX⟩
   rw [lub.unfold] at h₁
   induction h₁
@@ -632,7 +629,6 @@ noncomputable instance : OmegaCompletePartialOrder (Kahn α) where
   le_antisymm := by
     intro a b h₁ h₂
     coinduction generalizing [a, b] using Kahn.bisim
-    clear h₁ h₂ a b
     intro s₁ s₂ ⟨a, b, eq₁, eq₂, h₁, h₂⟩
     induction eq₁
     induction eq₂
@@ -767,7 +763,6 @@ theorem Kahn.fst.monotone {α: Type u} {β: Type v} :
   ∀ x y: Kahn (α × β), x ≤ y → x.fst ≤ y.fst := by
   intro a b h₁
   coinduction generalizing [a, b] using Kahn.le.coind α
-  clear h₁ a b
   intro a b ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
   induction h₂
@@ -796,7 +791,6 @@ theorem Kahn.fst.continuous {α: Type u} {β: Type v} :
   intro chain
   unfold OrderHom.Kahn.fst
   coinduction generalizing [chain] using Kahn.bisim
-  clear chain
   rintro s₁ s₂ ⟨chain, h₁, h₂, _⟩
   induction h₁
   induction h₂
@@ -851,7 +845,6 @@ theorem Kahn.snd.monotone {α: Type u} {β: Type v} :
   ∀ x y: Kahn (α × β), x ≤ y → x.snd ≤ y.snd := by
   intro a b h₁
   coinduction generalizing [a, b] using Kahn.le.coind β
-  clear h₁ a b
   intro a b ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
   induction h₂
@@ -877,7 +870,6 @@ theorem Kahn.snd.continuous {α: Type u} {β: Type v} :
   unfold OrderHom.Kahn.snd
   intro chain
   coinduction generalizing [chain] using Kahn.bisim
-  clear chain
   rintro s₁ s₂ ⟨chain, h₁, h₂, _⟩
   induction h₁
   induction h₂
@@ -946,7 +938,6 @@ def Kahn.tup {α: Type u} {β: Type v} (k₁: Kahn α) (k₂: Kahn β) : Kahn (�
 @[simp] theorem Kahn.tup_fst_snd {α: Type u} {β: Type v} (k: Kahn (α × β)) :
   tup k.fst k.snd = k := by
   coinduction generalizing [k] using bisim
-  clear k
   intro s₁ s₂ ⟨x, h₁, h₂, _⟩
   induction h₁
   cases x with
@@ -964,7 +955,6 @@ def Kahn.tup {α: Type u} {β: Type v} (k₁: Kahn α) (k₂: Kahn β) : Kahn (�
   ∀ (x y: Kahn α) (z w: Kahn β), x ≤ y → z ≤ w → tup x z ≤ tup y w := by
   intro x y z w h₁ h₂
   coinduction generalizing [x, y, z, w] using Kahn.le.coind _
-  clear h₁ h₂ x y z w
   intro X Y ⟨x, y, z, w, h₁, h₂, h₃, h₄⟩
   induction h₁
   induction h₂
@@ -1172,7 +1162,6 @@ def Kahn.map {α: Type u} {β: Type v} (f: α → β) (x: Kahn α) : Kahn β :=
   ∀ x y, x ≤ y → map f x ≤ map f y := by
   intro x y h₁
   coinduction generalizing [x, y] using Kahn.le.coind _
-  clear h₁ x y
   intro _ _ ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
   induction h₂
@@ -1201,7 +1190,6 @@ def Kahn.map.continuous {α: Type u} {β: Type v} (f: α → β) :
   intro chain
   unfold OrderHom.Kahn.map
   coinduction generalizing [chain] using Kahn.bisim
-  clear chain
   intro s₁ s₂ ⟨chain, eq₁, eq₂, h⟩
   clear h
   induction eq₁
@@ -1519,3 +1507,131 @@ noncomputable def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux : Kahn Prop �
 
 @[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux_apply (x: Kahn Prop) (y z: Kahn α) :
   ContinuousHom.Kahn.mux (x, y, z) = x.mux y z := rfl
+
+
+def Kahn.next (x: Kahn α) : Kahn α :=
+  Kahn.cases (bot := .bot) (cons := λ _ xs => xs) x
+
+@[simp] def Kahn.next.unfold_bot : Kahn.next (⊥: Kahn α) = ⊥ := by
+  rw [Kahn.next, Kahn.cases_bot]
+
+@[simp] def Kahn.next.unfold_cons (x: α) (xs: Kahn α) : Kahn.next (x ::: xs) = xs := by
+  rw [Kahn.next, Kahn.cases_cons]
+
+#check Kahn.F.mk.inj
+
+@[simps! coe]
+def OrderHom.Kahn.next : Kahn α →o Kahn α where
+  toFun := _root_.Kahn.next
+  monotone' := by
+    intro x y h₁
+    cases x with
+    | bot =>
+      simp
+    | cons x xs =>
+      cases y with
+      | bot =>
+        rw [Kahn.le_bot _ h₁]
+      | cons y ys =>
+        rw [Kahn.le_cons x y xs ys] at h₁
+        simp only [Kahn.next.unfold_cons]
+        apply h₁.right
+
+#check Preorder.le_trans
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.next : Kahn α →𝒄 Kahn α where
+  toFun := _root_.Kahn.next
+  monotone' := OrderHom.Kahn.next.monotone'
+  cont := by
+    intro chain
+    simp
+    apply le_antisymm
+    · cases Kahn.findCons chain with
+      | bot h₁ =>
+        rw [Kahn.ωSup_bot chain h₁]
+        rw [Kahn.ωSup_bot]
+        · simp
+        · intro n
+          simp [Chain.map, h₁ n]
+      | cons n x xs h₁ =>
+        rw [Kahn.ωSup_cons chain n x xs h₁]
+        apply ωSup_le
+        intro m
+        apply Preorder.le_trans _ _ _ _ (le_ωSup _ (n+m))
+        simp [←h₁ m]
+    · apply ωSup_le
+      intro n
+      apply OrderHom.Kahn.next.monotone
+      apply le_ωSup
+
+
+
+
+def Kahn.first (x: Kahn α) : Kahn α :=
+  Kahn.cases (bot := .bot) (cons := λ x _ => const x) x
+
+@[simp] def Kahn.first.unfold_bot : Kahn.first (⊥: Kahn α) = ⊥ := by
+  rw [Kahn.first, Kahn.cases_bot]
+
+@[simp] def Kahn.first.unfold_cons (x: α) (xs: Kahn α) : Kahn.first (x ::: xs) = const x := by
+  rw [Kahn.first, Kahn.cases_cons]
+
+@[simps! coe]
+def OrderHom.Kahn.first : Kahn α →o Kahn α where
+  toFun := _root_.Kahn.first
+  monotone' := by
+    intro x y h₁
+    cases x with
+    | bot =>
+      simp
+    | cons x xs =>
+      cases y with
+      | bot =>
+        rw [Kahn.le_bot _ h₁]
+      | cons y ys =>
+        rw [Kahn.le_cons x y xs ys] at h₁
+        simp only [Kahn.first.unfold_cons]
+        rw [h₁.left]
+
+#check Preorder.le_trans
+
+def OmegaCompletePartialOrder.ContinuousHom.Kahn.first : Kahn α →𝒄 Kahn α where
+  toFun := _root_.Kahn.first
+  monotone' := OrderHom.Kahn.first.monotone'
+  cont := by
+    intro chain
+    simp
+    apply le_antisymm
+    · cases Kahn.findCons chain with
+      | bot h₁ =>
+        rw [Kahn.ωSup_bot chain h₁]
+        rw [Kahn.ωSup_bot]
+        · simp
+        · intro n
+          simp [Chain.map, h₁ n]
+      | cons n x xs h₁ =>
+        conv =>
+          congr
+          · rw [Kahn.ωSup_cons chain n x xs h₁]
+          · rw [Kahn.ωSup_cons _ n x (OrderHom.const _ (Kahn.const x))]
+            rfl
+            tactic =>
+              intro m
+              simp [Chain.map, ←h₁ m, ←Kahn.const.unfold]
+        simp
+        have : ωSup (OrderHom.const _ (Kahn.const x)) = Kahn.const x := by
+          apply le_antisymm
+          · apply ωSup_le
+            intro n
+            apply le_refl
+          · apply le_ωSup (OrderHom.const _ (Kahn.const x)) n
+        rw [this]
+        conv =>
+          lhs
+          rw [Kahn.const.unfold]
+    · apply ωSup_le
+      intro n
+      apply OrderHom.Kahn.first.monotone
+      apply le_ωSup
+
+

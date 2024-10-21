@@ -79,6 +79,14 @@ def parseGoal (goal: Expr) (thm: Expr) : MetaM (Expr × List Expr) := do
       throwError s!"the goal and the coinduction theorem doesn't match:\n\t{goalFn}\n\t{goalFn'}"
     return (goalFn, exprs)
 
+def FilterIdent : List Term → TacticM (List Term)
+| x :: xs => do
+  match x with
+  | `($_:ident) =>
+    return x :: (←FilterIdent xs)
+  | _ => FilterIdent xs
+| [] => return []
+
 syntax "coinduction" ("[" (term),* "]")? "generalizing" "[" (term),* "]" "using" term : tactic
 
 --elab "coinduction" "[" hyps:term,* "]" "generalizing" "[" args:term,* "]" "using" thm:term : tactic => do
@@ -88,6 +96,19 @@ elab_rules : tactic
 
 
   withMainContext do
+    have hyps_syntax : Array Term := ←
+      match hyps with
+      | .some array => pure array
+      | .none => (do
+        let mut ret : Array Term := #[]
+        for ldecl in ← getLCtx do
+          if ldecl.isImplementationDetail then
+            continue
+
+          if let .sort .zero := ← whnf (← inferType ldecl.type) then
+            ret := ret.push (mkIdent ldecl.userName)
+        return ret)
+
     let hyps : Array Expr ←
       match hyps with
       | .some array => Array.mapM (λ h => Tactic.elabTerm h .none) array
@@ -126,7 +147,9 @@ elab_rules : tactic
     mvarid.assign <| .app (mkAppN new_goal <| .mk exprs) h
     --replaceMainGoal [new_goal.mvarId!, mvarid]
 
-    let (fvars, mvarid) ← new_goal.mvarId!.generalize (← Array.mapM (λ e => do return {expr := ← Tactic.elabTerm e none}) args)
+    let args_syntax: Array Term := args
+    let args ← Array.mapM (λ e => Tactic.elabTerm e none) args
+    let (fvars, mvarid) ← new_goal.mvarId!.generalize (Array.map (λ e => {expr := e}) args)
 
     let (vars, mvarid) ← mvarid.introNP (1 + exprs.length)
     let (vars, [init]) := vars.toList.splitAt (vars.size-1) | unreachable!
@@ -150,6 +173,9 @@ elab_rules : tactic
       evalTactic <| ← `(tactic|
         clear $(←exprToSyntax init);
       )
+
+      let _ ← List.mapM (λ h => do evalTactic <| ← `(tactic| clear $h)) <| ←FilterIdent hyps_syntax.toList
+      let _ ← List.mapM (λ h => do evalTactic <| ← `(tactic| clear $h)) <| ←FilterIdent args_syntax.toList
       let _ ← Array.mapM (λ fv => do evalTactic <| ← `(tactic| clear $(←exprToSyntax (mkFVar fv)))) fvars
       let _ ← List.mapM (λ fv => do evalTactic <| ← `(tactic| try clear $(←exprToSyntax (mkFVar fv)))) vars
       return ()

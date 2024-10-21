@@ -69,7 +69,6 @@ noncomputable def Square : Admissible (Kahn Prop) where
   admissible' := by
     intro chain h₁
     coinduction [h₁] generalizing [chain] using pgfp.theorem Square.SetF_mono
-    clear h₁ chain
     intro _ ⟨chain, eq₁, h₁⟩
     induction eq₁
     rw [Kahn.ωSup.unfold]
@@ -171,6 +170,100 @@ def Square.coind (hyp: Kahn Prop → Prop) :
   apply SetF_mono.monotone this
   apply h₁
   apply h₂
+
+def Square.and
+  [OmegaCompletePartialOrder α] [OrderBot α]
+  (P Q: α →𝒄 Kahn Prop) (x: α) (h: Admissible.And (Square.comp P) (Square.comp Q) x) :
+  Square ((P x).and (Q x)) := by
+  simp [Admissible.And] at h
+  coinduction [h] generalizing [P x, Q x] using Square.coind
+  intro pqx ⟨px, qx, eq₁, h₁, h₂⟩
+  induction eq₁
+  cases px with
+  | bot =>
+    apply SetF.bot
+    simp
+  | cons px pxs =>
+    cases qx with
+    | bot =>
+      apply SetF.bot
+      simp
+    | cons qx qxs =>
+      simp only [rewrite_cons] at h₁ h₂
+      apply SetF.cons (px ∧ qx) (pxs.and qxs)
+      · simp
+      · exact ⟨h₁.left, h₂.left⟩
+      · apply Or.inl
+        exists pxs
+        exists qxs
+        simp only [true_and]
+        exact ⟨h₁.right, h₂.right⟩
+
+def Square.or
+  [OmegaCompletePartialOrder α] [OrderBot α]
+  (P Q: α →𝒄 Kahn Prop) (x: α) (h: Admissible.Or (Square.comp P) (Square.comp Q) x) :
+  Square ((P x).or (Q x)) := by
+  simp [Admissible.Or] at h
+  coinduction [h] generalizing [P x, Q x] using Square.coind
+  rintro pqx ⟨px, qx, eq₁, (h₁ | h₁)⟩
+  <;> induction eq₁
+  · cases px with
+    | bot =>
+      apply SetF.bot
+      simp
+    | cons px pxs =>
+      cases qx with
+      | bot =>
+        apply SetF.bot
+        simp
+      | cons qx qxs =>
+        simp at h₁
+        apply SetF.cons px (pxs.or qxs) _ h₁.left
+        · apply Or.inl
+          exists pxs
+          exists qxs
+          simp [h₁.right]
+        · simp [h₁.left]
+  · cases px with
+    | bot =>
+      apply SetF.bot
+      simp
+    | cons px pxs =>
+      cases qx with
+      | bot =>
+        apply SetF.bot
+        simp
+      | cons qx qxs =>
+        simp at h₁
+        apply SetF.cons qx (pxs.or qxs) _ h₁.left
+        · apply Or.inl
+          exists pxs
+          exists qxs
+          simp [h₁.right]
+        · simp [h₁.left]
+
+
+
+--def Square.coind3
+--  [OmegaCompletePartialOrder α] [OrderBot α]
+--  (f: α →𝒄 α) (prop: α →𝒄 Kahn Prop) (hyp: α → Prop)
+--  (h₀: ∀ x y ys, Square (prop x) → prop x = y ::: ys → y ∧ Square ys)
+--  : Square (prop x) := by
+
+def Square.coind2
+  [OmegaCompletePartialOrder α] [OrderBot α]
+  (f: α →𝒄 Kahn Prop) (hyp: α → Prop) :
+  (∀ x, hyp x → f x = ⊥ ∨ ∃ y ys, f x = y ::: xs ∧ y ∧ hyp ys)
+  → ∀ x, hyp x → Square (f x) := by
+  intro h₁ x h₂
+  coinduction generalizing [x, f x] using Square.coind
+  intro w ⟨x, fx, eq₁, h₁, h₂⟩
+  induction eq₁
+  specialize h₁ x h₂
+  sorry
+
+
+
 
 
 syntax:max "□" term:max : term

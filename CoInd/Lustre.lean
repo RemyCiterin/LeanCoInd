@@ -750,29 +750,80 @@ defprop f.inv_y => (x: Kahn Int, y: Kahn Int) :=
 
 noncomputable def f.inv := Admissible.And inv_x inv_y
 
+
+open Kahn in
+def Square.le_add_lift (x y: Kahn ℤ) :
+  □((const 0).le x) → □((const 0).le y) →
+  □((const 0).le (x + y)) := by
+  intro h₁ h₂
+  coinduction generalizing [x, y] using Square.coind
+  intro w ⟨x, y, eq₁, h₁, h₂⟩
+  induction eq₁
+  cases x with
+  | bot =>
+    apply Square.SetF.bot
+    simp
+  | cons x xs =>
+    cases y
+    case bot =>
+      apply Square.SetF.bot
+      simp
+    case cons y ys =>
+      rw [const.unfold, le.unfold_cons, Square.rewrite_cons] at h₁ h₂
+      apply Square.SetF.cons (0 ≤ x + y) ((const 0).le (xs + ys))
+      · conv =>
+          rhs
+          rw [const.unfold]
+        simp
+      · linarith
+      · apply Or.inl
+        exists xs
+        exists ys
+        simp [h₁.right, h₂.right]
+
+open Kahn in
+def Square.le_const_lift (x y: ℤ) :
+  x ≤ y →
+  □((const x).le (const y)) := by
+  intro h₁
+  coinduction generalizing [x, y] using Square.coind
+  intro w ⟨x, y, eq₁, h₁⟩
+  induction eq₁
+  apply Square.SetF.cons (x ≤ y) ((const x).le (const y))
+  · conv =>
+      rhs
+      congr
+      <;> rw [const.unfold]
+    simp
+  · apply h₁
+  · apply Or.inl
+    exists x
+    exists y
+
+open Kahn in
 example : f.inv f_fix := by
   apply f_induction f.inv
   · intro ⟨x, y⟩ ⟨h₁, h₂⟩
-    simp [f_eqs]
-    conv =>
-      rhs
-      congr
-      · congr
-        · rw [Kahn.const.unfold]
-      · congr
-        · rw [Kahn.const.unfold]
-        · rhs
-          rw [Kahn.const.unfold]
-    simp [f.inv] at h₁ h₂
+    simp [f_eqs, f.inv, Admissible.And]
+    simp at h₁ h₂
+    have : (0:Int) ≤ 1 := by simp_arith
+    have h₃ := Square.le_add_lift x y h₁ h₂
+    have h₄ := Square.le_add_lift x (const 1) h₁ (Square.le_const_lift 0 1 this)
     constructor
-    · simp [f.inv_x]
-      coinduction generalizing [x, y] using Kahn.Square.coind
-      clear h₁ h₂ x y
-      intro w ⟨x, y, eq₁, ⟨h₁, h₂⟩⟩
-      induction eq₁
+    · conv =>
+        rhs
+        congr
+        <;> rw [const.unfold]
       simp
-    · simp [f.inv_y]
-      sorry
+      exact h₃
+    · conv =>
+        rhs
+        congr
+        · rw [const.unfold]
+        · lhs
+          rw [const.unfold]
+      simp
+      exact h₄
   · rw [Bot.bot, Prod.instBot]
     simp [f.inv, Admissible.And]
     refinment_type
