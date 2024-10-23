@@ -17,7 +17,7 @@ streams in Lean4), It contain multiple parts:
 ```lean
 open Kahn OmegaPartialOrder.ContinuousHom.Kahn
 
-defnode foo (X: Kahn Int, Y: Kahn Int) := Out
+defnode foo (X: Kahn Int, Y: Kahn Int) := Z
     where
         Z : Kahn Int := fby(Init, X)
         Init : Kahn Int := (X == Y ? 1 : 0)
