@@ -463,10 +463,10 @@ instance instFunLike : FunLike (Admissible α) α Prop where
     rw [Admissible.mk.injEq]
     exact h₁
 
-instance : CoeFun (Admissible α) fun _ => α → Prop := ⟨toSet⟩
+instance instCoeFun : CoeFun (Admissible α) fun _ => α → Prop := ⟨toSet⟩
 
-instance : Coe (Admissible α) (Set α) where
-  coe p := λ x => p x
+-- instance instCoeSet : Coe (Admissible α) (α → Prop) where
+--   coe p := λ x => p x
 
 @[refinment_type] def admissible (p: Admissible α) (c: Chain α) :
   (∀ n, p (c n)) → p (ωSup c) := p.admissible' c

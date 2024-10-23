@@ -15,8 +15,6 @@ namespace Tactic.Coinduction
 
 open Lean Expr Elab Term Tactic Meta Qq
 
-#check 42
-
 
 def Property.parse : List Expr → MetaM ((P: Q(Prop)) × Q($P))
 | [x] => do
@@ -50,16 +48,15 @@ where
 
 def errorMessage :=
   "A coinduction theorem must be of the form:\n" ++
-  "(p: ∀ (x₁:T₁) ... (xₙ:Tₙ) → Prop) → " ++
-  "(∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?coindGoalFn p x₁ ... xₙ) → " ++
-  "∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?goalFn x₁ ... xₙ" ++
-  "and the goal must be of the form" ++
-  "?goalFn, e₁, ..., eₙ" ++
-  "\n"
+  "  (p: ∀ (x₁:T₁) ... (xₙ:Tₙ) → Prop) →\n" ++
+  "  (∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?coindGoalFn p x₁ ... xₙ) →\n" ++
+  "  ∀ (x₁:T₁) ... (xₙ:Tₙ), p x₁ ... xₙ → ?goalFn x₁ ... xₙ\n" ++
+  "And the goal must be of the form:\n" ++
+  "  ?goalFn, e₁, ..., eₙ\n"
 
 def parseThmArgs (l: List α) : Option (α × α × List α × α) := do
   let P :: hyp :: args := l | none
-  if args.length = 0 then none
+  --if args.length = 0 then none
   let (args, [h]) := args.splitAt (args.length -1) | none
   return (P, hyp, args, h)
 

@@ -301,7 +301,7 @@ syntax "defcont" ident "=>" tupleBinders* ":" term ":=" lustre_term : command
 
 
 -- Allow to define properties as the composition of a continuous function from (I₁₁ × ... × I₁ₙ) × ... × (Iₘ₁ × ... × Iₘₖ) →𝒄 Stream Prop
--- and Kahn.Square
+-- and Kahn.Box
 syntax "defprop" ident "=>" tupleBinders* ":=" lustre_term : command
 
 def prodOfList : List Term → MacroM Term
@@ -408,7 +408,7 @@ def compileProp (name_ident: Ident) (inputs: List Binders) (body: TSyntax `lustr
   let thm ← mkForall (List.join (List.map (λ x => x.idents) inputs)) (List.join (List.map (λ x => x.types) inputs)) thm_body
   `(
     noncomputable def $name_ident : Admissible $I :=
-      Admissible.comp Kahn.Square $(←ir.toTerm (List.map (λ x => x.idents.length) inputs))
+      Admissible.comp Kahn.Box $(←ir.toTerm (List.map (λ x => x.idents.length) inputs))
     @[simp] def $name_apply : $thm := by intros; rfl
   )
 
@@ -750,46 +750,53 @@ defprop f.inv_y => (x: Kahn Int, y: Kahn Int) :=
 
 noncomputable def f.inv := Admissible.And inv_x inv_y
 
-
-open Kahn in
-def Square.le_add_lift (x y: Kahn ℤ) :
-  □((const 0).le x) → □((const 0).le y) →
-  □((const 0).le (x + y)) := by
+def Box.le_add_add (x y z t: Kahn ℤ) :
+  □(x.le y) →
+  □(z.le t) →
+  □((x + z).le (y + t)) := by
   intro h₁ h₂
-  coinduction generalizing [x, y] using Square.coind
-  intro w ⟨x, y, eq₁, h₁, h₂⟩
+  coinduction generalizing [x, y, z, t] using Kahn.Box.coind
+  intro w ⟨x, y, z, t, eq₁, h₁, h₂⟩
   induction eq₁
-  cases x with
-  | bot =>
-    apply Square.SetF.bot
+
+  cases x
+  case bot =>
+    apply Kahn.Box.SetF.bot
     simp
-  | cons x xs =>
-    cases y
-    case bot =>
-      apply Square.SetF.bot
-      simp
-    case cons y ys =>
-      rw [const.unfold, le.unfold_cons, Square.rewrite_cons] at h₁ h₂
-      apply Square.SetF.cons (0 ≤ x + y) ((const 0).le (xs + ys))
-      · conv =>
-          rhs
-          rw [const.unfold]
-        simp
-      · linarith
-      · apply Or.inl
-        exists xs
-        exists ys
-        simp [h₁.right, h₂.right]
+  cases y
+  case cons.bot =>
+    apply Kahn.Box.SetF.bot
+    simp
+  cases z
+  case bot =>
+    apply Kahn.Box.SetF.bot
+    simp
+  cases t
+  case bot =>
+    apply Kahn.Box.SetF.bot
+    simp
+  case cons.cons.cons.cons x xs y ys z zs t ts =>
+    simp only [Kahn.le.unfold_cons, Kahn.Box.rewrite_cons] at h₁ h₂
+    apply Kahn.Box.SetF.cons (x+z ≤ y+t) ((xs+zs).le (ys+ts))
+    · simp
+    · linarith
+    · apply Or.inl
+      exists xs
+      exists ys
+      exists zs
+      exists ts
+      simp [h₁.right, h₂.right]
+
 
 open Kahn in
-def Square.le_const_lift (x y: ℤ) :
+def Box.le_const_const {x y: ℤ} :
   x ≤ y →
   □((const x).le (const y)) := by
   intro h₁
-  coinduction generalizing [x, y] using Square.coind
+  coinduction generalizing [x, y] using Box.coind
   intro w ⟨x, y, eq₁, h₁⟩
   induction eq₁
-  apply Square.SetF.cons (x ≤ y) ((const x).le (const y))
+  apply Box.SetF.cons (x ≤ y) ((const x).le (const y))
   · conv =>
       rhs
       congr
@@ -801,34 +808,54 @@ def Square.le_const_lift (x y: ℤ) :
     exists y
 
 open Kahn in
+def Kahn.add_const_const (x y: ℤ) :
+  const x + const y = const (x+y) := by
+  coinduction generalizing [x, y] using Kahn.bisim
+  intro l r ⟨x, y, eq₁, eq₂, _⟩
+  induction eq₁
+  induction eq₂
+  apply eqF.cons (x+y) (const x + const y) (const (x + y))
+  · conv =>
+      rhs
+      congr
+      <;> rw [const.unfold]
+    simp
+  · conv =>
+      rhs
+      rw [const.unfold]
+  · exists x
+    exists y
+
+
+open Kahn in
 example : f.inv f_fix := by
   apply f_induction f.inv
   · intro ⟨x, y⟩ ⟨h₁, h₂⟩
     simp [f_eqs, f.inv, Admissible.And]
     simp at h₁ h₂
     have : (0:Int) ≤ 1 := by simp_arith
-    have h₃ := Square.le_add_lift x y h₁ h₂
-    have h₄ := Square.le_add_lift x (const 1) h₁ (Square.le_const_lift 0 1 this)
+    have h₃ := Box.le_add_add (Kahn.const 0) x (Kahn.const 0) y h₁ h₂
+    have h₄ := Box.le_add_add (Kahn.const 0) x (Kahn.const 0) (Kahn.const 1) h₁
+      (Box.le_const_const this)
+    rw [Kahn.add_const_const] at h₃ h₄
     constructor
     · conv =>
         rhs
         congr
-        <;> rw [const.unfold]
+        <;> rw [Kahn.const.unfold]
       simp
       exact h₃
     · conv =>
         rhs
         congr
-        · rw [const.unfold]
+        · rw [Kahn.const.unfold]
         · lhs
-          rw [const.unfold]
+          rw [Kahn.const.unfold]
       simp
       exact h₄
   · rw [Bot.bot, Prod.instBot]
     simp [f.inv, Admissible.And]
     refinment_type
-
-
 
 -- property y >= 1
 
