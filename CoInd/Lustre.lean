@@ -132,23 +132,23 @@ syntax "(" lustre_term "?" lustre_term ":" lustre_term ")" : lustre_term
 syntax num : lustre_term
 
 macro_rules
-| `(lustre_term| !$x) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.not($x))
-| `(lustre_term| $x + $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.add($x, $y))
-| `(lustre_term| $x - $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.sub($x, $y))
-| `(lustre_term| $x * $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.mul($x, $y))
-| `(lustre_term| $x / $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.div($x, $y))
-| `(lustre_term| $x % $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.mod($x, $y))
-| `(lustre_term| $x ∧ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.and($x, $y))
-| `(lustre_term| $x ∨ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.or($x, $y))
-| `(lustre_term| $x = $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.or($x, $y))
-| `(lustre_term| $x ≤ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.le($x, $y))
-| `(lustre_term| $x < $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.lt($x, $y))
-| `(lustre_term| $x ≥ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.ge($x, $y))
-| `(lustre_term| $x > $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.Kahn.gt($x, $y))
+| `(lustre_term| !$x) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.not($x))
+| `(lustre_term| $x + $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.add($x, $y))
+| `(lustre_term| $x - $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.sub($x, $y))
+| `(lustre_term| $x * $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.mul($x, $y))
+| `(lustre_term| $x / $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.div($x, $y))
+| `(lustre_term| $x % $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.mod($x, $y))
+| `(lustre_term| $x ∧ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.and($x, $y))
+| `(lustre_term| $x ∨ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.or($x, $y))
+| `(lustre_term| $x = $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.or($x, $y))
+| `(lustre_term| $x ≤ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.le($x, $y))
+| `(lustre_term| $x < $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.lt($x, $y))
+| `(lustre_term| $x ≥ $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.ge($x, $y))
+| `(lustre_term| $x > $y) => `(lustre_term|OmegaCompletePartialOrder.ContinuousHom.ωStream.gt($x, $y))
 | `(lustre_term| ( $x ? $y : $z )) =>
-  `(lustre_term| OmegaCompletePartialOrder.ContinuousHom.Kahn.mux($x, $y, $z))
+  `(lustre_term| OmegaCompletePartialOrder.ContinuousHom.ωStream.mux($x, $y, $z))
 | `(lustre_term| $n:num) =>
-  `(lustre_term| {Kahn.const $n})
+  `(lustre_term| {ωStream.const $n})
 
 -- proof that Ast and IR are not empty, used by partial functions
 instance : Inhabited Ast := ⟨.ident (mkIdent `_)⟩
@@ -257,7 +257,7 @@ def prodNarith : List Term → MacroM Term
   `(term| OmegaCompletePartialOrder.ContinuousHom.Prod.prod $x $(←prodNarith xs))
 
 partial def IR.toTerm (numVars: List Nat) : IR → MacroM Term
-| .showFrom ir t => do `(term| (show _ × _ →𝒄 Kahn $t from $(←ir.toTerm numVars)))
+| .showFrom ir t => do `(term| (show _ × _ →𝒄 ωStream $t from $(←ir.toTerm numVars)))
 | .var v (n+1) =>
   match numVars with
   | _ :: xs => do
@@ -301,7 +301,7 @@ syntax "defcont" ident "=>" tupleBinders* ":" term ":=" lustre_term : command
 
 
 -- Allow to define properties as the composition of a continuous function from (I₁₁ × ... × I₁ₙ) × ... × (Iₘ₁ × ... × Iₘₖ) →𝒄 Stream Prop
--- and Kahn.Box
+-- and ωStream.Box
 syntax "defprop" ident "=>" tupleBinders* ":=" lustre_term : command
 
 def prodOfList : List Term → MacroM Term
@@ -408,7 +408,7 @@ def compileProp (name_ident: Ident) (inputs: List Binders) (body: TSyntax `lustr
   let thm ← mkForall (List.join (List.map (λ x => x.idents) inputs)) (List.join (List.map (λ x => x.types) inputs)) thm_body
   `(
     noncomputable def $name_ident : Admissible $I :=
-      Admissible.comp Kahn.Box $(←ir.toTerm (List.map (λ x => x.idents.length) inputs))
+      Admissible.comp ωStream.Box $(←ir.toTerm (List.map (λ x => x.idents.length) inputs))
     @[simp] def $name_apply : $thm := by intros; rfl
   )
 
@@ -426,37 +426,37 @@ macro_rules
 
 
 namespace Example
-  open ContinuousHom.Kahn Kahn in
-  defcont foo => (x : Kahn Int, y: Kahn Int) (z: Kahn Int, t: Kahn Int) : Kahn Int :=
+  open ContinuousHom.ωStream ωStream in
+  defcont foo => (x : ωStream Int, y: ωStream Int) (z: ωStream Int, t: ωStream Int) : ωStream Int :=
     fby({const 0}, z)
 
-  open ContinuousHom.Kahn Kahn in
-  defprop foo1 => (x : Kahn Int, y: Kahn Int) (z: Kahn Int, t: Kahn Int) :=
-    {ContinuousHom.Kahn.map (λ x => x ≤ 0)}(fby({const 0}, z))
+  open ContinuousHom.ωStream ωStream in
+  defprop foo1 => (x : ωStream Int, y: ωStream Int) (z: ωStream Int, t: ωStream Int) :=
+    {ContinuousHom.ωStream.map (λ x => x ≤ 0)}(fby({const 0}, z))
 
   #print foo
   #check foo_apply
 
-  def bar : Int := Kahn.cases (foo ((Kahn.const 0, Kahn.const 1), (Kahn.const 2, Kahn.const 3))) (cons := λ x _ => x) (bot := 1)
+  def bar : Int := ωStream.cases (foo ((ωStream.const 0, ωStream.const 1), (ωStream.const 2, ωStream.const 3))) (cons := λ x _ => x) (bot := 1)
 
   example : bar = 0 := by
-    simp only [foo_apply, bar, Kahn.fby]
-    rw [Kahn.const.unfold]
+    simp only [foo_apply, bar, ωStream.fby]
+    rw [ωStream.const.unfold]
     simp?
 end Example
 
 -- given a set of equations, return a set of declarations to construct each locals variables of the equations
 -- As example with the node
 --
--- defnode foo (x: Kahn Nat) : ... := ...
+-- defnode foo (x: ωStream Nat) : ... := ...
 --   where
---     y :: Kahn Nat := x
---     z :: Kahn Nat := y
+--     y :: ωStream Nat := x
+--     z :: ωStream Nat := y
 --
 -- It generate the functions
 --
--- defcont foo.y => (x: Kahn Nat) (y: Kahn.Nat, z: Kahn.Nat) : Kahn.Nat := x
--- defcont foo.z => (x: Kahn Nat) (y: Kahn.Nat, z: Kahn.Nat) : Kahn.Nat := y
+-- defcont foo.y => (x: ωStream Nat) (y: ωStream.Nat, z: ωStream.Nat) : ωStream.Nat := x
+-- defcont foo.z => (x: ωStream Nat) (y: ωStream.Nat, z: ωStream.Nat) : ωStream.Nat := y
 def compileEqs (name: Ident) (inputs: Binders) (locals: Binders) : Equations → MacroM (List <| TSyntax `command)
 | ⟨id :: idents, ty :: types, eq :: eqs⟩ => do
   let commands ← compileEqs name inputs locals ⟨idents, types, eqs⟩
@@ -661,16 +661,16 @@ macro_rules
   compileNode name inputs O out eqs
 
 
-instance : Coe α (Kahn α) where
-  coe := Kahn.const
+instance : Coe α (ωStream α) where
+  coe := ωStream.const
 
-open ContinuousHom.Kahn in
-defnode foo (i₁: Kahn ℕ) : Kahn ℕ := l₁
+open ContinuousHom.ωStream in
+defnode foo (i₁: ωStream ℕ) : ωStream ℕ := l₁
   where
-    l₁ : Kahn ℕ := fby(1, l₁)
+    l₁ : ωStream ℕ := fby(1, l₁)
 
 -- An example of invariant we want to prove about foo
-defprop foo.inv => (i₁: Kahn ℕ) (l₁: Kahn ℕ) := {ContinuousHom.Kahn.map (λ l => l ≥ 1)}(l₁)
+defprop foo.inv => (i₁: ωStream ℕ) (l₁: ωStream ℕ) := {ContinuousHom.ωStream.map (λ l => l ≥ 1)}(l₁)
 #print foo.inv
 #check foo.inv_apply
 
@@ -691,12 +691,12 @@ defprop foo.inv => (i₁: Kahn ℕ) (l₁: Kahn ℕ) := {ContinuousHom.Kahn.map 
 #check foo_induction
 
 
-example (i₁: Kahn ℕ) : foo.inv (i₁, foo_fix i₁) := by
+example (i₁: ωStream ℕ) : foo.inv (i₁, foo_fix i₁) := by
   apply foo_induction ⊤ foo.inv
   · intro i l h₁ h₂
     clear h₁ i₁
     simp? [foo_eqs]
-    rw [Kahn.const.unfold]
+    rw [ωStream.const.unfold]
     simp? [foo.inv]
     assumption
   · intro _
@@ -704,9 +704,9 @@ example (i₁: Kahn ℕ) : foo.inv (i₁, foo_fix i₁) := by
     refinment_type
   · trivial
 
-defnode bar : Kahn ℕ := l₁
+defnode bar : ωStream ℕ := l₁
   where
-    l₁ : Kahn ℕ := {ContinuousHom.Kahn.fby}({Kahn.const 1}, l₁)
+    l₁ : ωStream ℕ := {ContinuousHom.ωStream.fby}({ωStream.const 1}, l₁)
 
 -- from I × L to O
 #print bar_out
@@ -724,60 +724,72 @@ defnode bar : Kahn ℕ := l₁
 
 #check bar_induction
 
-defcont bar.inv => (l₁: Kahn ℕ) : Kahn Prop := {ContinuousHom.Kahn.map (λ n => n ≥ 1)}(l₁)
+defcont bar.inv => (l₁: ωStream ℕ) : ωStream Prop :=
+  {ContinuousHom.ωStream.map (λ n => n ≥ 1)}(l₁)
 #check foo.inv
 
 
-defnode baz (i₁: Kahn ℕ) : Kahn ℕ := i₁
+defnode baz (i₁: ωStream ℕ) : ωStream ℕ := i₁
 
 #print baz
 #check baz_apply
 
 namespace Example
 
-open ContinuousHom.Kahn in
-defnode f : Kahn ℤ := y
+open ContinuousHom.ωStream in
+defnode f : ωStream ℤ := y
   where
-    x : Kahn ℤ := fby(0, x + y)
-    y : Kahn ℤ := fby(1, x + 1)
+    x : ωStream ℤ := fby(0, x + y)
+    y : ωStream ℤ := fby(1, x + 1)
 
-open ContinuousHom.Kahn Kahn in
-defprop f.inv_x => (x: Kahn Int, y: Kahn Int) :=
+open ContinuousHom.ωStream ωStream in
+defprop f.inv_x => (x: ωStream Int, y: ωStream Int) :=
   0 ≤ x
 
-defprop f.inv_y => (x: Kahn Int, y: Kahn Int) :=
+#print f.inv_x
+#check f.inv_x_apply
+
+defprop f.inv_y => (x: ωStream Int, y: ωStream Int) :=
   0 ≤ y
+
+defprop f.inv' => (x: ωStream Int, y: ωStream ℤ) :=
+  0 ≤ x ∧ 0 ≤ y
+
+#check f.inv'_apply
+
+#check ∀ x y, f.inv' (x, y) → f.inv_x (x, y)
 
 noncomputable def f.inv := Admissible.And inv_x inv_y
 
-def Box.le_add_add (x y z t: Kahn ℤ) :
+open ωStream in
+def Box.le_add_add (x y z t: ωStream ℤ) :
   □(x.le y) →
   □(z.le t) →
   □((x + z).le (y + t)) := by
   intro h₁ h₂
-  coinduction generalizing [x, y, z, t] using Kahn.Box.coind
+  coinduction generalizing [x, y, z, t] using ωStream.Box.coind
   intro w ⟨x, y, z, t, eq₁, h₁, h₂⟩
   induction eq₁
 
   cases x
   case bot =>
-    apply Kahn.Box.SetF.bot
+    apply ωStream.Box.SetF.bot
     simp
   cases y
   case cons.bot =>
-    apply Kahn.Box.SetF.bot
+    apply ωStream.Box.SetF.bot
     simp
   cases z
   case bot =>
-    apply Kahn.Box.SetF.bot
+    apply ωStream.Box.SetF.bot
     simp
   cases t
   case bot =>
-    apply Kahn.Box.SetF.bot
+    apply ωStream.Box.SetF.bot
     simp
   case cons.cons.cons.cons x xs y ys z zs t ts =>
-    simp only [Kahn.le.unfold_cons, Kahn.Box.rewrite_cons] at h₁ h₂
-    apply Kahn.Box.SetF.cons (x+z ≤ y+t) ((xs+zs).le (ys+ts))
+    simp only [ωStream.le.unfold_cons, ωStream.Box.rewrite_cons] at h₁ h₂
+    apply Box.SetF.cons (x+z ≤ y+t) ((xs+zs).le (ys+ts))
     · simp
     · linarith
     · apply Or.inl
@@ -788,7 +800,10 @@ def Box.le_add_add (x y z t: Kahn ℤ) :
       simp [h₁.right, h₂.right]
 
 
-open Kahn in
+#check ωStream.Box.coind
+--#check □(p ∧ q → r) → □p → □q → □r
+
+open ωStream in
 def Box.le_const_const {x y: ℤ} :
   x ≤ y →
   □((const x).le (const y)) := by
@@ -807,10 +822,10 @@ def Box.le_const_const {x y: ℤ} :
     exists x
     exists y
 
-open Kahn in
-def Kahn.add_const_const (x y: ℤ) :
+open ωStream in
+def ωStream.add_const_const (x y: ℤ) :
   const x + const y = const (x+y) := by
-  coinduction generalizing [x, y] using Kahn.bisim
+  coinduction generalizing [x, y] using ωStream.bisim
   intro l r ⟨x, y, eq₁, eq₂, _⟩
   induction eq₁
   induction eq₂
@@ -827,37 +842,35 @@ def Kahn.add_const_const (x y: ℤ) :
     exists y
 
 
-open Kahn in
+open ωStream in
 example : f.inv f_fix := by
   apply f_induction f.inv
   · intro ⟨x, y⟩ ⟨h₁, h₂⟩
     simp [f_eqs, f.inv, Admissible.And]
     simp at h₁ h₂
     have : (0:Int) ≤ 1 := by simp_arith
-    have h₃ := Box.le_add_add (Kahn.const 0) x (Kahn.const 0) y h₁ h₂
-    have h₄ := Box.le_add_add (Kahn.const 0) x (Kahn.const 0) (Kahn.const 1) h₁
+    have h₃ := Box.le_add_add (ωStream.const 0) x (ωStream.const 0) y h₁ h₂
+    have h₄ := Box.le_add_add (ωStream.const 0) x (ωStream.const 0) (ωStream.const 1) h₁
       (Box.le_const_const this)
-    rw [Kahn.add_const_const] at h₃ h₄
+    rw [ωStream.add_const_const] at h₃ h₄
     constructor
     · conv =>
         rhs
         congr
-        <;> rw [Kahn.const.unfold]
+        <;> rw [ωStream.const.unfold]
       simp
       exact h₃
     · conv =>
         rhs
         congr
-        · rw [Kahn.const.unfold]
+        · rw [ωStream.const.unfold]
         · lhs
-          rw [Kahn.const.unfold]
+          rw [ωStream.const.unfold]
       simp
       exact h₄
   · rw [Bot.bot, Prod.instBot]
     simp [f.inv, Admissible.And]
     refinment_type
-
--- property y >= 1
 
 #check f.x
 #check f.x_apply

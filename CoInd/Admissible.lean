@@ -29,17 +29,17 @@ def OmegaCompletePartialOrder.Admissible.comp {α: Type u} {β: Type v}
   (p: Admissible β) (f: α →𝒄 β) (x: α) : (comp p f x) = (p (f x)) := by
   rfl
 
-namespace Kahn
+namespace ωStream
 inductive Box.SetF
-  (aux: Set (Kahn Prop)) (s: Kahn Prop) : Prop where
+  (aux: Set (ωStream Prop)) (s: ωStream Prop) : Prop where
 | bot : ⊥ = s → SetF aux s
 | cons x xs : x ::: xs = s → x → aux xs → SetF aux s
 
 @[simps! coe]
-def Box.SetF_mono : (Kahn Prop → Prop) →o (Kahn Prop → Prop) where
+def Box.SetF_mono : (ωStream Prop → Prop) →o (ωStream Prop → Prop) where
   toFun aux x := Box.SetF aux x
   monotone' s₁ s₂ h₁ x h₂ := by
-    cases x using Kahn.cases with
+    cases x using ωStream.cases with
     | bot =>
       apply SetF.bot
       rfl
@@ -48,24 +48,24 @@ def Box.SetF_mono : (Kahn Prop → Prop) →o (Kahn Prop → Prop) where
       · rfl
       · cases h₂ with
         | bot h₃ =>
-          simp [Bot.bot, Kahn.cons] at h₃
+          simp [Bot.bot, Cons.cons] at h₃
         | cons y ys h₃ h₄ h₅ =>
-          rw [Kahn.cons.injEq] at h₃
+          rw [ωStream.cons.injEq] at h₃
           induction h₃.left
           induction h₃.right
           assumption
       · cases h₂ with
         | bot h₃ =>
-          simp [Bot.bot, Kahn.cons] at h₃
+          simp [Bot.bot, Cons.cons] at h₃
         | cons y ys h₃ h₄ h₅ =>
-          rw [Kahn.cons.injEq] at h₃
+          rw [ωStream.cons.injEq] at h₃
           induction h₃.left
           induction h₃.right
           apply h₁
           assumption
 
 
-noncomputable def Box : Admissible (Kahn Prop) where
+noncomputable def Box : Admissible (ωStream Prop) where
   toSet s := pgfp (Box.SetF_mono) ⊥ s
 
   admissible' := by
@@ -73,8 +73,8 @@ noncomputable def Box : Admissible (Kahn Prop) where
     coinduction [h₁] generalizing [chain] using pgfp.theorem Box.SetF_mono
     intro _ ⟨chain, eq₁, h₁⟩
     induction eq₁
-    rw [Kahn.ωSup.unfold]
-    cases Kahn.findCons chain with
+    rw [ωStream.ωSup.unfold]
+    cases ωStream.findCons chain with
     | bot h₂ =>
       apply Box.SetF.bot
       rfl
@@ -85,9 +85,9 @@ noncomputable def Box : Admissible (Kahn Prop) where
         rw [←h₂ 0, ←pgfp.unfold] at h₁
         cases h₁ with
         | bot h₃ =>
-          simp [Bot.bot, Kahn.cons] at h₃
+          simp [Bot.bot, Cons.cons] at h₃
         | cons y ys h₃ h₄ h₅ =>
-          rw [Kahn.cons.injEq] at h₃
+          rw [ωStream.cons.injEq] at h₃
           induction h₃.left
           assumption
       · apply Or.inl
@@ -99,9 +99,9 @@ noncomputable def Box : Admissible (Kahn Prop) where
           rw [←h₂ m, ←pgfp.unfold] at h₁
           cases h₁ with
           | bot h₃ =>
-            simp [Bot.bot, Kahn.cons] at h₃
+            simp [Bot.bot, Cons.cons] at h₃
           | cons y ys h₃ h₄ h₅ =>
-            rw [Kahn.cons.injEq] at h₃
+            rw [ωStream.cons.injEq] at h₃
             induction h₃.left
             induction Eq.symm h₃.right
             cases h₅ with
@@ -113,7 +113,7 @@ noncomputable def Box : Admissible (Kahn Prop) where
 #check pgfp.unfold
 
 @[refinment_type]
-def Box.cons (x: Prop) (xs: Kahn Prop) :
+def Box.cons (x: Prop) (xs: ωStream Prop) :
   x → Box xs → Box (x ::: xs) := by
   intro h₁ h₂
   simp only [Box, Membership.mem]
@@ -121,7 +121,7 @@ def Box.cons (x: Prop) (xs: Kahn Prop) :
   apply Box.SetF.cons x xs rfl h₁ (Or.inr h₂)
 
 @[simp]
-def Box.rewrite_cons (x: Prop) (xs: Kahn Prop) :
+def Box.rewrite_cons (x: Prop) (xs: ωStream Prop) :
   Box (x ::: xs) = (x ∧ Box xs) := by
   apply propext
   constructor
@@ -130,9 +130,9 @@ def Box.rewrite_cons (x: Prop) (xs: Kahn Prop) :
     rw [←pgfp.unfold] at h
     cases h with
     | bot eq =>
-      simp [Bot.bot, Kahn.cons] at eq
+      simp [Bot.bot, Cons.cons] at eq
     | cons y ys eq h₁ h₂ =>
-      rw [Kahn.cons.injEq] at eq
+      rw [ωStream.cons.injEq] at eq
       induction eq.left
       induction eq.right
       constructor
@@ -152,7 +152,7 @@ def Box.bot :
   rw [←pgfp.unfold]
   apply Box.SetF.bot rfl
 
-def Box.coind (hyp: Kahn Prop → Prop) :
+def Box.coind (hyp: ωStream Prop → Prop) :
   (∀ x, hyp x → Box.SetF (λ x => hyp x ∨ Box x) x)
   → ∀ x, hyp x → Box x := by
   intro h₁ x h₂
@@ -178,7 +178,7 @@ def Box.coind (hyp: Kahn Prop → Prop) :
 -- (Box P).Admissible (Box Q) instead of Box (P.and Q)
 def Box.and
   [OmegaCompletePartialOrder α] [OrderBot α]
-  (P Q: Kahn Prop)
+  (P Q: ωStream Prop)
   (h: Box P ∧ Box Q) :
   Box (P.and Q) := by
   coinduction [h] generalizing [P, Q] using Box.coind
@@ -204,12 +204,12 @@ def Box.and
         simp only [true_and]
         exact ⟨h₁.right, h₂.right⟩
 
--- Same as Kahn.and, Kahn.or is very limited because we must ensure that streams
+-- Same as Kahn.and, ωStream.or is very limited because we must ensure that streams
 -- are infinite to use it. In practice we prefere
 -- (Box P).Admissible (Box Q) instead of Box (P.or Q)
 def Box.or
   [OmegaCompletePartialOrder α] [OrderBot α]
-  (P Q: Kahn Prop) (h: Box P ∨ Box Q) :
+  (P Q: ωStream Prop) (h: Box P ∨ Box Q) :
   Box (P.or Q) := by
   coinduction [h] generalizing [P, Q] using Box.coind
   rintro pq ⟨p, q, eq₁, (h₁ | h₁)⟩
@@ -251,25 +251,25 @@ def Box.or
 
 
 
-def Box.coind2
-  [OmegaCompletePartialOrder α] [OrderBot α]
-  (f: α →𝒄 Kahn Prop) (hyp: α → Prop) :
-  (∀ x, hyp x → f x = ⊥ ∨ ∃ y ys, f x = y ::: xs ∧ y ∧ hyp ys)
-  → ∀ x, hyp x → Box (f x) := by
-  intro h₁ x h₂
-  coinduction generalizing [x, f x] using Box.coind
-  intro w ⟨x, fx, eq₁, h₁, h₂⟩
-  induction eq₁
-  specialize h₁ x h₂
-  sorry
+--def Box.coind2
+--  [OmegaCompletePartialOrder α] [OrderBot α]
+--  (f: α →𝒄 ωStream Prop) (hyp: α → Prop) :
+--  (∀ x, hyp x → f x = ⊥ ∨ ∃ y ys, f x = y ::: xs ∧ y ∧ hyp ys)
+--  → ∀ x, hyp x → Box (f x) := by
+--  intro h₁ x h₂
+--  coinduction generalizing [x, f x] using Box.coind
+--  intro w ⟨x, fx, eq₁, h₁, h₂⟩
+--  induction eq₁
+--  specialize h₁ x h₂
+--  sorry
 
-end Kahn
+end ωStream
 
 syntax:max "□" term:max : term
 macro_rules
-| `(□ $t) => `(Kahn.Box $t)
+| `(□ $t) => `(ωStream.Box $t)
 
--- I try to pretty-print Kahn.Box using □ but I fail because of the implicit
+-- I try to pretty-print ωStream.Box using □ but I fail because of the implicit
 -- coercions...
---delab_rule Kahn.Box
+--delab_rule ωStream.Box
 --| `($_ $P) => do ``(□ $P)

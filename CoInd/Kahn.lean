@@ -30,46 +30,46 @@ variable {α : Type u}
 #print Container
 #print Container.Obj
 
-inductive Kahn.A (α: Type u) where
-| cons : α → Kahn.A α
+inductive ωStream.A (α: Type u) where
+| cons : α → ωStream.A α
 | bot
 
-def Kahn.B {α: Type u} : Kahn.A α → Type u
+def ωStream.B {α: Type u} : ωStream.A α → Type u
 | .cons _ => PUnit
 | _ => PEmpty
 
-def Kahn.C (α: Type u) : Container := ⟨A α, Kahn.B⟩
+def ωStream.C (α: Type u) : Container := ⟨A α, ωStream.B⟩
 
-inductive Kahn.F (α: Type u) (β: Type v) where
+inductive ωStream.F (α: Type u) (β: Type v) where
 | cons : α → β → F α β
 | bot : F α β
 
-instance [Inhabited β] : Inhabited (Kahn.F α β) where
+instance [Inhabited β] : Inhabited (ωStream.F α β) where
   default := .bot
 
-def Kahn (α: Type u) : Type u := Container.M (Kahn.C α)
+def ωStream (α: Type u) : Type u := Container.M (ωStream.C α)
 
-#print Kahn.C
-#print Kahn.A
-#print Kahn.F
+#print ωStream.C
+#print ωStream.A
+#print ωStream.F
 
 #check Container.Obj
 
-def Kahn.corec.automaton
-  {β: Type v} (f: β → F α β) (x: β) : Container.Obj (Kahn.C α) β :=
+def ωStream.corec.automaton
+  {β: Type v} (f: β → F α β) (x: β) : Container.Obj (ωStream.C α) β :=
   match f x with
-  | .bot => { fst := Kahn.A.bot, snd := PEmpty.elim}
-  | .cons a b => ⟨Kahn.A.cons a, λ _ => b⟩
+  | .bot => { fst := ωStream.A.bot, snd := PEmpty.elim}
+  | .cons a b => ⟨ωStream.A.cons a, λ _ => b⟩
 
-def Kahn.corec {β: Type v} (f: β → F α β) (x₀: β) : Kahn α :=
+def ωStream.corec {β: Type v} (f: β → F α β) (x₀: β) : ωStream α :=
   Container.M.corec (corec.automaton f) x₀
 
-def Kahn.dest (k: Kahn α) : Kahn.F α (Kahn α) :=
+def ωStream.dest (k: ωStream α) : ωStream.F α (ωStream α) :=
   match Container.M.destruct k with
   | ⟨.cons x, f⟩ => .cons x (f PUnit.unit)
   | ⟨.bot, _⟩ => .bot
 
-@[simp] theorem Kahn.dest_corec {β: Type v} (f: β → F α β) (x₀: β) :
+@[simp] theorem ωStream.dest_corec {β: Type v} (f: β → F α β) (x₀: β) :
   dest (corec f x₀) =
     match f x₀ with
     | .cons x xs => .cons x (corec f xs)
@@ -83,82 +83,86 @@ def Kahn.dest (k: Kahn α) : Kahn.F α (Kahn α) :=
     rfl
 
 
-def Kahn.F.mk (k: F α (Kahn α)) : Kahn α :=
+def ωStream.F.mk (k: F α (ωStream α)) : ωStream α :=
   match k with
   | .bot =>
-    Container.M.construct ⟨Kahn.A.bot, PEmpty.elim⟩
+    Container.M.construct ⟨ωStream.A.bot, PEmpty.elim⟩
   | .cons x xs =>
-    Container.M.construct ⟨Kahn.A.cons x, λ _ => xs⟩
+    Container.M.construct ⟨ωStream.A.cons x, λ _ => xs⟩
 
-@[simp] def Kahn.dest_mk (k:F α (Kahn α)) : k.mk.dest = k := by
+@[simp] def ωStream.dest_mk (k:F α (ωStream α)) : k.mk.dest = k := by
   match k with
   | .bot =>
     rfl
   | .cons _ xs =>
     rfl
 
-def Kahn.F.mk.inj (k k': F α (Kahn α)) :
+def ωStream.F.mk.inj (k k': F α (ωStream α)) :
   k.mk = k'.mk → k = k' := by
   intro h
   have h := congrArg dest h
   rw [dest_mk, dest_mk] at h
   assumption
 
-@[simp] def Kahn.F.mk.injEq (k k': F α (Kahn α)) :
+@[simp] def ωStream.F.mk.injEq (k k': F α (ωStream α)) :
   (k.mk = k'.mk) = (k = k') := by
   apply propext
   constructor
   · apply inj
   · apply congrArg
 
-instance : Bot (Kahn α) where
-  bot := Kahn.F.bot.mk
+instance : Bot (ωStream α) where
+  bot := ωStream.F.bot.mk
+
+class Cons (α: outParam (Sort u)) (β: Sort v) where
+  cons: α → β → β
+
+infixr:67 " ::: " => Cons.cons
+
+instance : Cons α (ωStream α) where
+  cons x xs := (ωStream.F.cons x xs).mk
 
 
-def Kahn.cons (x: α) (xs: Kahn α) : Kahn α := (F.cons x xs).mk
-
-infixr:67 " ::: " => Kahn.cons
-
-@[app_unexpander Kahn.cons]
-def Kahn.unexpandCons : Lean.PrettyPrinter.Unexpander
+@[app_unexpander Cons.cons]
+def ωStream.unexpandCons : Lean.PrettyPrinter.Unexpander
 | `($_ $x $xs) => `($x ::: $xs)
 | _ => throw ()
 
-instance : Inhabited (Kahn α) where
+instance : Inhabited (ωStream α) where
   default := ⊥
 
-abbrev Kahn.bot {α} : Kahn α := ⊥
+abbrev ωStream.bot {α} : ωStream α := ⊥
 
-def Kahn.dest_bot : (@bot α).dest = .bot := by rfl
+def ωStream.dest_bot : (@bot α).dest = .bot := by rfl
 
-instance : Nonempty (Kahn α) := ⟨default⟩
+instance : Nonempty (ωStream α) := ⟨default⟩
 
 -- return if a kahn network is a cons
-def Kahn.cons? (k: F α β) : Prop :=
+def ωStream.cons? (k: F α β) : Prop :=
   match k with
   | .cons _ _ => True
   | _ => False
 
-instance Kahn.cons?.decide (k: F α β) : Decidable (cons? k) :=
+instance ωStream.cons?.decide (k: F α β) : Decidable (cons? k) :=
   match k with
   | .cons _ _ => isTrue (by rw [cons?]; trivial)
   | .bot => isFalse (by rw [cons?]; intro h; apply False.elim h)
 
 -- return if a kahn network is an epsilon
-def Kahn.bot? (k: F α β) : Prop :=
+def ωStream.bot? (k: F α β) : Prop :=
   match k with
   | .bot => True
   | _ => False
 
-instance Kahn.eps?.decide (k: F α β) : Decidable (bot? k) :=
+instance ωStream.eps?.decide (k: F α β) : Decidable (bot? k) :=
   match k with
   | .cons _ _ => isFalse (by rw [bot?]; intro h; apply False.elim h)
   | .bot => isTrue (by rw [bot?]; trivial)
 
 
 @[elab_as_elim, cases_eliminator]
-protected def Kahn.cases {motive: Kahn α → Sort w} (x: Kahn α)
-  (cons: ∀ a (y: Kahn α), motive (a ::: y))
+protected def ωStream.cases {motive: ωStream α → Sort w} (x: ωStream α)
+  (cons: ∀ a (y: ωStream α), motive (a ::: y))
   (bot: motive ⊥)
   : motive x :=
   Container.M.cases (λ ⟨node, children⟩ =>
@@ -175,28 +179,29 @@ protected def Kahn.cases {motive: Kahn α → Sort w} (x: Kahn α)
   ) x
 
 @[simp]
-protected def Kahn.cases_bot {motive: Kahn α → Sort w}
-  (cons: ∀ a (x: Kahn α), motive (a ::: x))
+protected def ωStream.cases_bot {motive: ωStream α → Sort w}
+  (cons: ∀ a (x: ωStream α), motive (a ::: x))
   (bot: motive ⊥) :
-  Kahn.cases ⊥ cons bot = bot := by
-  rw [Kahn.cases]
+  ωStream.cases ⊥ cons bot = bot := by
+  rw [ωStream.cases]
   simp [F.mk, Bot.bot]
 
 @[simp]
-protected def Kahn.cases_cons {motive: Kahn α → Sort w} (a: α) (x: Kahn α)
+protected def ωStream.cases_cons {motive: ωStream α → Sort w} (a: α) (x: ωStream α)
   (cons: ∀ a x, motive (a ::: x))
   (bot: motive ⊥) :
-  Kahn.cases (a ::: x) cons bot = cons a x := by
-  rw [Kahn.cases]
-  simp [F.mk, Kahn.cons]
+  ωStream.cases (a ::: x) cons bot = cons a x := by
+  rw [ωStream.cases]
+  simp [F.mk, Cons.cons]
 
-inductive Kahn.eqF (r : Kahn α → Kahn α → Prop) : Kahn α → Kahn α → Prop where
+inductive ωStream.eqF (r : ωStream α → ωStream α → Prop) :
+  ωStream α → ωStream α → Prop where
 | bot {a b} :
   ⊥ = a → ⊥ = b → eqF r a b
-| cons {a b} (x : α) (xs ys: Kahn α) :
+| cons {a b} (x : α) (xs ys: ωStream α) :
   x ::: xs = a → x ::: ys = b → r xs ys → eqF r a b
 
-theorem Kahn.bisim (r : Kahn α → Kahn α → Prop)
+theorem ωStream.bisim (r : ωStream α → ωStream α → Prop)
   (hyp: ∀ s₁ s₂, r s₁ s₂ → eqF r s₁ s₂) : ∀ x y, r x y → x = y := by
   apply Container.M.bisim
   intro x y h₁
@@ -224,24 +229,24 @@ theorem Kahn.bisim (r : Kahn α → Kahn α → Prop)
       · intro _
         apply h₃
 
-def Kahn.dest.inj (k k': Kahn α) :
+def ωStream.dest.inj (k k': ωStream α) :
   k.dest = k'.dest → k = k' := by
   intro h
   apply bisim (λ k k' => k.dest = k'.dest) _ _ _ h
   intro s₁ s₂ h₁
-  cases s₁ using Kahn.cases with
+  cases s₁ using ωStream.cases with
   | bot =>
-    cases s₂ using Kahn.cases with
+    cases s₂ using ωStream.cases with
     | bot =>
       apply eqF.bot <;> rfl
     | cons y ys =>
-      simp [Bot.bot, Kahn.cons] at h₁
+      simp [Bot.bot, Cons.cons] at h₁
   | cons x xs =>
-    cases s₂ using Kahn.cases with
+    cases s₂ using ωStream.cases with
     | bot =>
-      simp [Bot.bot, Kahn.cons] at h₁
+      simp [Bot.bot, Cons.cons] at h₁
     | cons y ys =>
-      simp only [Kahn.dest_mk, Kahn.cons, Kahn.F.cons.injEq] at h₁
+      simp only [ωStream.dest_mk, Cons.cons, ωStream.F.cons.injEq] at h₁
       induction h₁.left
       induction h₁.right
       apply eqF.cons x xs xs
@@ -249,7 +254,7 @@ def Kahn.dest.inj (k k': Kahn α) :
       · rfl
       · rfl
 
-@[simp] def Kahn.dest.injEq (k k': Kahn α) :
+@[simp] def ωStream.dest.injEq (k k': ωStream α) :
   (k.dest = k'.dest) = (k = k') := by
   apply propext
   constructor
@@ -257,17 +262,17 @@ def Kahn.dest.inj (k k': Kahn α) :
   · apply congrArg
 
 
-@[simp] def Kahn.mk_dest (k:Kahn α) : k.dest.mk = k := by
+@[simp] def ωStream.mk_dest (k:ωStream α) : k.dest.mk = k := by
   apply dest.inj
   simp only [dest_mk]
 
-def Kahn.cons.inj (x y: α) (xs ys: Kahn α) :
+def ωStream.cons.inj (x y: α) (xs ys: ωStream α) :
   x ::: xs = y ::: ys → x = y ∧ xs = ys := by
   intro h
-  rw [Kahn.cons, Kahn.cons, F.mk.injEq, F.cons.injEq] at h
+  simp only [Cons.cons, F.mk.injEq, F.cons.injEq] at h
   assumption
 
-def Kahn.cons.injEq (x y: α) (xs ys: Kahn α) :
+def ωStream.cons.injEq (x y: α) (xs ys: ωStream α) :
   (x ::: xs = y ::: ys) = (x = y ∧ xs = ys) := by
   apply propext
   constructor
@@ -278,12 +283,12 @@ def Kahn.cons.injEq (x y: α) (xs ys: Kahn α) :
     rfl
 
 
-theorem Kahn.corec.unfold {β: Type v} (f: β → F α β) (x₀: β) :
+theorem ωStream.corec.unfold {β: Type v} (f: β → F α β) (x₀: β) :
   corec f x₀ =
       match f x₀ with
       | .cons x xs => x ::: (corec f xs)
       | .bot => ⊥ := by
-  have := congrArg Kahn.F.mk (dest_corec f x₀)
+  have := congrArg ωStream.F.mk (dest_corec f x₀)
   rw [mk_dest] at this
   rw [this]
   cases f x₀ with
@@ -292,16 +297,18 @@ theorem Kahn.corec.unfold {β: Type v} (f: β → F α β) (x₀: β) :
   | cons x xs =>
     rfl
 
---attribute [eqns Kahn.corec.unfold] Kahn.corec
+--attribute [eqns ωStream.corec.unfold] ωStream.corec
 
-inductive Kahn.leF (r : Kahn α → Kahn α → Prop) : Kahn α → Kahn α → Prop where
+inductive ωStream.leF (r : ωStream α → ωStream α → Prop) :
+  ωStream α → ωStream α → Prop where
 | bot {a b} :
   ⊥ = a→ leF r a b
-| cons {a b} (x : α) (xs ys: Kahn α) :
+| cons {a b} (x : α) (xs ys: ωStream α) :
   x ::: xs = a → x ::: ys = b → r xs ys → leF r a b
 
 -- A monotone version of the less than functor
-def Kahn.leF.mono : (Kahn α → Kahn α → Prop) →o (Kahn α → Kahn α → Prop) where
+def ωStream.leF.mono :
+  (ωStream α → ωStream α → Prop) →o (ωStream α → ωStream α → Prop) where
   toFun := leF
   monotone' := by
     intro p q h₁ k₁ k₂ h₂
@@ -313,13 +320,13 @@ def Kahn.leF.mono : (Kahn α → Kahn α → Prop) →o (Kahn α → Kahn α →
     | bot h₂ =>
       apply leF.bot h₂
 
-instance Kahn.LEinst : LE (Kahn α) where
-  le x y := pgfp Kahn.leF.mono ⊥ x y
+instance ωStream.LEinst : LE (ωStream α) where
+  le x y := pgfp ωStream.leF.mono ⊥ x y
 
 #check pgfp.accumulate
 #check pgfp.coinduction
 
-theorem Kahn.le.coind (α: Type u) (P: Kahn α → Kahn α → Prop)
+theorem ωStream.le.coind (α: Type u) (P: ωStream α → ωStream α → Prop)
   (hyp: ∀ x y, P x y → leF (P ⊔ LE.le) x y) :
   ∀ x y, P x y → x ≤ y := by
   intro x y h₁
@@ -336,7 +343,7 @@ theorem Kahn.le.coind (α: Type u) (P: Kahn α → Kahn α → Prop)
     exact hyp
   · assumption
 
-theorem Kahn.le.unfold {x y: Kahn α} :
+theorem ωStream.le.unfold {x y: ωStream α} :
   (x ≤ y) = leF (λ x y => x ≤ y) x y := by
   have := pgfp.unfold (@leF.mono α) ⊥
   conv =>
@@ -344,18 +351,19 @@ theorem Kahn.le.unfold {x y: Kahn α} :
     simp only [LE.le]
     rfl
   rw [←this]
-  have : ∀ p:((_: Kahn α) × Kahn α → Prop), ⊥ ⊔ p = p := by
+  have : ∀ p:((_: ωStream α) × ωStream α → Prop), ⊥ ⊔ p = p := by
     intro p
     funext x
     simp
   simp only [this, CompleteLattice.bot_sup]
   rfl
 
-@[simp] theorem Kahn.leF.mono.def (r: Kahn α → Kahn α → Prop) (x y: Kahn α) :
+@[simp] theorem ωStream.leF.mono.def
+  (r: ωStream α → ωStream α → Prop) (x y: ωStream α) :
   leF.mono r x y = leF r x y := by rfl
 
 -- proof of the Scott Continuity of `leF`
-instance Kahn.leF.SC : ScottContinuousNat (@Kahn.leF.mono α) where
+instance ωStream.leF.SC : ScottContinuousNat (@ωStream.leF.mono α) where
   scottContinuousNat := by
     intro S x y h₁
     simp only [iInf_Prop_eq, iInf_apply] at h₁
@@ -372,20 +380,20 @@ instance Kahn.leF.SC : ScottContinuousNat (@Kahn.leF.mono α) where
         intro n
         cases h₁ n with
         | bot h₂ =>
-          simp only [Kahn.cons, Bot.bot, F.mk.injEq] at h₂
+          simp only [Cons.cons, Bot.bot, F.mk.injEq] at h₂
         | cons a as bs eq₁ eq₂ h =>
           rw [cons.injEq] at eq₁
           rw [cons.injEq] at eq₂
           rw [←eq₁.right, ←eq₂.right]
           assumption
 
-def Kahn.le.refl (x: Kahn α) : x ≤ x := by
+def ωStream.le.refl (x: ωStream α) : x ≤ x := by
   simp only [LE.le]
-  coinduction generalizing [x] using Kahn.le.coind α
+  coinduction generalizing [x] using ωStream.le.coind α
   intro a b ⟨x, h₁, h₂, h₃⟩; clear h₃
   induction h₁
   induction h₂
-  cases x using Kahn.cases with
+  cases x using ωStream.cases with
   | bot =>
     apply leF.bot
     rfl
@@ -394,9 +402,9 @@ def Kahn.le.refl (x: Kahn α) : x ≤ x := by
     apply Or.inl
     exists xs
 
-def Kahn.le.trans (x y z: Kahn α) : x ≤ y → y ≤ z → x ≤ z := by
+def ωStream.le.trans (x y z: ωStream α) : x ≤ y → y ≤ z → x ≤ z := by
   intro h₁ h₂
-  coinduction generalizing [x, y, z] using Kahn.le.coind α
+  coinduction generalizing [x, y, z] using ωStream.le.coind α
   intro l r ⟨x, y, z, h₁, h₂, h₃, h₄⟩
   induction h₁
   induction h₂
@@ -410,7 +418,7 @@ def Kahn.le.trans (x y z: Kahn α) : x ≤ y → y ≤ z → x ≤ z := by
     induction h₂
     cases h₄ with
     | bot h₄ =>
-      simp [Bot.bot, cons] at h₄
+      simp [Bot.bot, Cons.cons] at h₄
     | cons a as bs h₁ h₂ h₄ =>
       induction h₂
       rw [cons.injEq] at h₁
@@ -422,37 +430,37 @@ def Kahn.le.trans (x y z: Kahn α) : x ≤ y → y ≤ z → x ≤ z := by
       exists as
       exists bs
 
-instance : Preorder (Kahn α) where
-  le_refl := Kahn.le.refl
-  le_trans := Kahn.le.trans
+instance : Preorder (ωStream α) where
+  le_refl := ωStream.le.refl
+  le_trans := ωStream.le.trans
 
 @[mono]
-def Kahn.bot_le (x: Kahn α) : ⊥ ≤ x := by
+def ωStream.bot_le (x: ωStream α) : ⊥ ≤ x := by
   rw [le.unfold]
   apply leF.bot rfl
 
-instance {α: Type u} : OrderBot (Kahn α) where
-  bot_le := Kahn.bot_le
+instance {α: Type u} : OrderBot (ωStream α) where
+  bot_le := ωStream.bot_le
 
 
-def Kahn.le_bot (x: Kahn α) : x ≤ ⊥ → x = ⊥ := by
+def ωStream.le_bot (x: ωStream α) : x ≤ ⊥ → x = ⊥ := by
   intro h
   rw [le.unfold] at h
   cases h with
   | bot h =>
     exact Eq.symm h
   | cons x xs ys h₁ h₂ h₃ =>
-    simp [cons, Bot.bot] at h₂
+    simp [Cons.cons, Bot.bot] at h₂
 
-def Kahn.cons_le (x: α) (xs rhs: Kahn α) :
-  (x ::: xs ≤ rhs) → {ys: Kahn α // rhs = x ::: ys ∧ xs ≤ ys} :=
-  Kahn.cases rhs
+def ωStream.cons_le (x: α) (xs rhs: ωStream α) :
+  (x ::: xs ≤ rhs) → {ys: ωStream α // rhs = x ::: ys ∧ xs ≤ ys} :=
+  ωStream.cases rhs
     (cons := λ y ys h =>
       ⟨ys, by
         rw [le.unfold] at h
         cases h with
         | bot h =>
-          simp [cons, Bot.bot] at h
+          simp [Cons.cons, Bot.bot] at h
         | cons a as bs h₁ h₂ h₃ =>
           rw [cons.injEq] at h₁ h₂
           induction h₁.left
@@ -463,17 +471,17 @@ def Kahn.cons_le (x: α) (xs rhs: Kahn α) :
       ⟩
     ) (bot := λ h => False.elim (by
       have h' := le_bot (x ::: xs) h
-      simp [cons, Bot.bot] at h'
+      simp [Cons.cons, Bot.bot] at h'
     ))
 
-def Kahn.le_cons (x y: α) (xs ys: Kahn α) :
+def ωStream.le_cons (x y: α) (xs ys: ωStream α) :
   x ::: xs ≤ y ::: ys ↔ x = y ∧ xs ≤ ys := by
   constructor
   · intro h₁
     rw [le.unfold] at h₁
     cases h₁ with
     | bot h =>
-      simp [Bot.bot, cons] at h
+      simp [Bot.bot, Cons.cons] at h
     | cons a as bs h₁ h₂ h₃ =>
       rw [cons.injEq] at h₁ h₂
       induction h₁.right
@@ -487,17 +495,18 @@ def Kahn.le_cons (x y: α) (xs ys: Kahn α) :
     apply leF.cons x xs ys rfl rfl h₂
 
 @[mono]
-def Kahn.le_of_le_cons (x: α) (xs ys: Kahn α) :
+def ωStream.le_of_le_cons (x: α) (xs ys: ωStream α) :
   xs ≤ ys → x ::: xs ≤ x ::: ys := by
   rw [le_cons]
   trivial
 
-inductive Kahn.findCons.Result (f: Nat →o Kahn α) : Type u where
+inductive ωStream.findCons.Result (f: Nat →o ωStream α) : Type u where
 | bot : (∀ n, f n = ⊥) → Result f
-| cons (n:ℕ) (x: α) (g: Chain (Kahn α)) : (∀ k, x ::: g k = f (n+k)) → Result f
+| cons (n:ℕ) (x: α) (g: Chain (ωStream α)) :
+  (∀ k, x ::: g k = f (n+k)) → Result f
 
-def Kahn.findCons.fromIndex
-  {x xs} (f: Nat →o Kahn α) (n:Nat)
+def ωStream.findCons.fromIndex
+  {x xs} (f: Nat →o ωStream α) (n:Nat)
   (h₁: f n = x ::: xs) : Result f :=
   Result.cons n x
     ⟨λ k => (go k).val, by
@@ -511,30 +520,30 @@ def Kahn.findCons.fromIndex
       Eq.symm (go k).property
     )
 where
-  go : ∀ k, {xs: Kahn α // f (n+k) = x ::: xs} := λ k =>
+  go : ∀ k, {xs: ωStream α // f (n+k) = x ::: xs} := λ k =>
     have h₂ : f n ≤ f (n+k) := by
       apply f.monotone'
       simp
     have ⟨ys, h₃, _⟩ := cons_le x xs (f <| n+k) (by rw [h₁] at h₂; exact h₂)
     ⟨ys, h₃⟩
 
-def Kahn.findCons.exists (f: Nat →o Kahn α) : ∃ _: Result f, True := by
+def ωStream.findCons.exists (f: Nat →o ωStream α) : ∃ _: Result f, True := by
   by_cases h:(∀ n, f n = ⊥)
   · exists Result.bot h
   · rw [not_forall] at h
     have ⟨n, h⟩ := h
     revert h
-    cases h:f n using Kahn.cases with
+    cases h:f n using ωStream.cases with
     | bot => simp [not_true]
     | cons x xs =>
       intro _
       apply Exists.intro (fromIndex f n h) True.intro
 
-noncomputable def Kahn.findCons (f: Nat →o Kahn α) : findCons.Result f :=
+noncomputable def ωStream.findCons (f: Nat →o ωStream α) : findCons.Result f :=
   (Classical.indefiniteDescription _ (findCons.exists f)).val
 
 
-noncomputable def Kahn.lub (f: Nat →o Kahn α) : Kahn α :=
+noncomputable def ωStream.lub (f: Nat →o ωStream α) : ωStream α :=
   corec (λ f =>
     match findCons f with
     | .cons _ x xs _ =>
@@ -542,7 +551,7 @@ noncomputable def Kahn.lub (f: Nat →o Kahn α) : Kahn α :=
     | .bot _ => .bot
   ) f
 
-theorem Kahn.lub.unfold (f: ℕ →o Kahn α) :
+theorem ωStream.lub.unfold (f: ℕ →o ωStream α) :
   lub f = match findCons f with
           | .cons _ x xs _ => x ::: lub xs
           | .bot _ => ⊥ := by
@@ -553,14 +562,14 @@ theorem Kahn.lub.unfold (f: ℕ →o Kahn α) :
   | cons _ _ _ _ =>
     rfl
 
-theorem Kahn.lub_le (f: ℕ →o Kahn α) (x: Kahn α)
+theorem ωStream.lub_le (f: ℕ →o ωStream α) (x: ωStream α)
   (hyp: ∀ n, f n ≤ x) : lub f ≤ x := by
   coinduction generalizing [f, x] using le.coind α
   intro a b ⟨f, x, lhs, rhs, hyp⟩
   induction lhs
   induction rhs
   clear a b
-  rw [Kahn.lub.unfold]
+  rw [ωStream.lub.unfold]
   cases findCons f with
   | bot h₁ =>
     apply leF.bot rfl
@@ -587,8 +596,8 @@ theorem Kahn.lub_le (f: ℕ →o Kahn α) (x: Kahn α)
         exact this.right
 
 
-theorem Kahn.le_lub
-  (f: Nat →o Kahn α) (n: Nat) (X : Kahn α)
+theorem ωStream.le_lub
+  (f: Nat →o ωStream α) (n: Nat) (X : ωStream α)
   (hX: X ≤ f n) : X ≤ lub f := by
   coinduction generalizing [X, n, f] using le.coind α
   intro x y ⟨X, n, f, h₁, h₂, hX⟩
@@ -605,7 +614,7 @@ theorem Kahn.le_lub
     cases findCons f with
     | bot h₂ =>
       specialize h₂ n
-      simp [h₁, Bot.bot, cons] at h₂
+      simp [h₁, Bot.bot, Cons.cons] at h₂
     | cons m a as h₃ =>
       simp only
       have h₄ : x = a := by
@@ -638,42 +647,42 @@ theorem Kahn.le_lub
           apply f.monotone'
           simp
 
-noncomputable instance : OmegaCompletePartialOrder (Kahn α) where
+noncomputable instance : OmegaCompletePartialOrder (ωStream α) where
   le_antisymm := by
     intro a b h₁ h₂
-    coinduction generalizing [a, b] using Kahn.bisim
+    coinduction generalizing [a, b] using ωStream.bisim
     intro s₁ s₂ ⟨a, b, eq₁, eq₂, h₁, h₂⟩
     induction eq₁
     induction eq₂
-    rw [Kahn.le.unfold] at h₁
+    rw [ωStream.le.unfold] at h₁
     cases h₁ with
     | bot h₁ =>
       induction h₁
-      have := Kahn.le_bot _ h₂
+      have := ωStream.le_bot _ h₂
       induction Eq.symm this
       induction h₂
-      apply Kahn.eqF.bot rfl rfl
+      apply ωStream.eqF.bot rfl rfl
     | cons x xs ys eq₁ eq₂ h₁ =>
       induction eq₁
       induction eq₂
-      rw [Kahn.le_cons] at h₂
+      rw [ωStream.le_cons] at h₂
       have h₃ := h₂.right
-      apply Kahn.eqF.cons x xs ys rfl rfl
+      apply ωStream.eqF.cons x xs ys rfl rfl
       exists xs
       exists ys
 
-  ωSup := Kahn.lub
+  ωSup := ωStream.lub
 
-  ωSup_le f x h := Kahn.lub_le f x h
-  le_ωSup f n := Kahn.le_lub f n (f n) (le_refl _)
+  ωSup_le f x h := ωStream.lub_le f x h
+  le_ωSup f n := ωStream.le_lub f n (f n) (le_refl _)
 
-theorem Kahn.ωSup.unfold (f: ℕ →o Kahn α) :
+theorem ωStream.ωSup.unfold (f: ℕ →o ωStream α) :
   ωSup f = match findCons f with
           | .cons _ x xs _ => x ::: ωSup xs
           | .bot _ => ⊥ :=
   lub.unfold f
 
-theorem Kahn.ωSup_bot (f: ℕ →o Kahn α) :
+theorem ωStream.ωSup_bot (f: ℕ →o ωStream α) :
   (∀ n, f n = ⊥) → ωSup f = ⊥ := by
   intro h
   rw [ωSup.unfold]
@@ -686,21 +695,22 @@ theorem Kahn.ωSup_bot (f: ℕ →o Kahn α) :
     rw [Nat.add_zero] at h'
     exfalso
     rw [h] at h'
-    simp [cons, Bot.bot] at h'
+    simp [Cons.cons, Bot.bot] at h'
 
-#print Kahn.findCons.Result
+#print ωStream.findCons.Result
 
-theorem Kahn.ωSup_cons (f: ℕ →o Kahn α) :
-  (n : ℕ) → (x : α) → (xs : ℕ →o Kahn α) → (∀ (k : ℕ), x ::: xs k = f (n + k)) →
+theorem ωStream.ωSup_cons (f: ℕ →o ωStream α) :
+  (n : ℕ) → (x : α) → (xs : ℕ →o ωStream α) →
+  (∀ (k : ℕ), x ::: xs k = f (n + k)) →
   ωSup f = x ::: ωSup xs :=  by
   intro n x xs h₁
-  rw [Kahn.ωSup.unfold f]
+  rw [ωStream.ωSup.unfold f]
   cases findCons f with
   | bot h₂ =>
     specialize h₁ 0
     specialize h₂ n
     rw [Nat.add_zero, h₂] at h₁
-    simp [cons, Bot.bot] at h₁
+    simp [Cons.cons, Bot.bot] at h₁
   | cons m y ys h₂ =>
     have h₃ := h₁ m
     have h₄ := h₂ n
@@ -748,39 +758,39 @@ def OmegaCompletePartialOrder.Chain.ωSup_offset
 
 
 
-def Kahn.findCons.Result.offset (m: ℕ) (f: ℕ →o Kahn α)
-  (n : ℕ) (x : α) (xs : Chain (Kahn α))
+def ωStream.findCons.Result.offset (m: ℕ) (f: ℕ →o ωStream α)
+  (n : ℕ) (x : α) (xs : Chain (ωStream α))
   (hyp: ∀ (k : ℕ), x ::: xs k = f (n + k)) :
-  {ys: Chain (Kahn α) // ∀ k, x ::: ys k = f ((n + m) + k)} where
+  {ys: Chain (ωStream α) // ∀ k, x ::: ys k = f ((n + m) + k)} where
   val := xs.offset m
   property k := by
     rw [OmegaCompletePartialOrder.Chain.offset, OrderHom.mk_apply, hyp]
     apply congrArg f
     simp_arith
 
-#check Kahn.corec
-#print Kahn.F
-def Kahn.fst {α: Type u} {β: Type v} (k: Kahn (α × β)) : Kahn α :=
+#check ωStream.corec
+#print ωStream.F
+def ωStream.fst {α: Type u} {β: Type v} (k: ωStream (α × β)) : ωStream α :=
   corec
-    (fun k => Kahn.cases k (cons:= λ x xs => F.cons x.fst xs) (bot := F.bot)) k
+    (fun k => ωStream.cases k (cons:= λ x xs => F.cons x.fst xs) (bot := F.bot)) k
 
-@[simp] theorem Kahn.fst.unfold_bot {α: Type u} {β: Type v} :
-  @Kahn.fst α β ⊥ = ⊥ := by
-  rw [fst, corec.unfold, Kahn.cases_bot]
+@[simp] theorem ωStream.fst.unfold_bot {α: Type u} {β: Type v} :
+  @ωStream.fst α β ⊥ = ⊥ := by
+  rw [fst, corec.unfold, ωStream.cases_bot]
 
-@[simp] theorem Kahn.fst.unfold_cons
-  {α: Type u} {β: Type v} (x: α × β) (xs : Kahn (α × β)) :
-  @Kahn.fst α β (x ::: xs) = x.fst ::: xs.fst := by
-  rw [fst, corec.unfold, Kahn.cases_cons, cons.injEq]
+@[simp] theorem ωStream.fst.unfold_cons
+  {α: Type u} {β: Type v} (x: α × β) (xs : ωStream (α × β)) :
+  @ωStream.fst α β (x ::: xs) = x.fst ::: xs.fst := by
+  rw [fst, corec.unfold, ωStream.cases_cons, cons.injEq]
   trivial
 
---attribute [eqns Kahn.fst.unfold_cons Kahn.fst.unfold_bot] Kahn.fst
+--attribute [eqns ωStream.fst.unfold_cons ωStream.fst.unfold_bot] ωStream.fst
 
 @[mono]
-theorem Kahn.fst.monotone {α: Type u} {β: Type v} :
-  ∀ x y: Kahn (α × β), x ≤ y → x.fst ≤ y.fst := by
+theorem ωStream.fst.monotone {α: Type u} {β: Type v} :
+  ∀ x y: ωStream (α × β), x ≤ y → x.fst ≤ y.fst := by
   intro a b h₁
-  coinduction generalizing [a, b] using Kahn.le.coind α
+  coinduction generalizing [a, b] using ωStream.le.coind α
   intro a b ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
   induction h₂
@@ -797,18 +807,19 @@ theorem Kahn.fst.monotone {α: Type u} {β: Type v} :
     exists ys
 
 @[simps! coe]
-def OrderHom.Kahn.fst {α: Type u} {β: Type v} : Kahn (α × β) →o Kahn α where
-  toFun := _root_.Kahn.fst
-  monotone' {x y} h := Kahn.fst.monotone x y h
+def OrderHom.ωStream.fst {α: Type u} {β: Type v} :
+  ωStream (α × β) →o ωStream α where
+  toFun := _root_.ωStream.fst
+  monotone' {x y} h := ωStream.fst.monotone x y h
 
-#check Kahn.ωSup_bot
-#check Kahn.ωSup_cons
+#check ωStream.ωSup_bot
+#check ωStream.ωSup_cons
 
-theorem Kahn.fst.continuous {α: Type u} {β: Type v} :
-  OmegaCompletePartialOrder.Continuous (@OrderHom.Kahn.fst α β) := by
+theorem ωStream.fst.continuous {α: Type u} {β: Type v} :
+  OmegaCompletePartialOrder.Continuous (@OrderHom.ωStream.fst α β) := by
   intro chain
-  unfold OrderHom.Kahn.fst
-  coinduction generalizing [chain] using Kahn.bisim
+  unfold OrderHom.ωStream.fst
+  coinduction generalizing [chain] using ωStream.bisim
   rintro s₁ s₂ ⟨chain, h₁, h₂, _⟩
   induction h₁
   induction h₂
@@ -842,33 +853,34 @@ theorem Kahn.fst.continuous {α: Type u} {β: Type v} :
     · exists xs
 
 @[simps! apply]
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.fst
-  {α: Type u} {β: Type v} : Kahn (α × β) →𝒄 Kahn α where
-  toFun := _root_.Kahn.fst
-  monotone' := OrderHom.Kahn.fst.monotone
-  cont := Kahn.fst.continuous
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.fst
+  {α: Type u} {β: Type v} : ωStream (α × β) →𝒄 ωStream α where
+  toFun := _root_.ωStream.fst
+  monotone' := OrderHom.ωStream.fst.monotone
+  cont := ωStream.fst.continuous
 
-def Kahn.snd {α: Type u} {β: Type v} (k: Kahn (α × β)) : Kahn β :=
+def ωStream.snd {α: Type u} {β: Type v} (k: ωStream (α × β)) : ωStream β :=
   corec
-    (fun k => Kahn.cases k (cons:= λ  x xs => F.cons x.snd xs) (bot := F.bot)) k
+    (fun k => ωStream.cases k (cons:= λ  x xs => F.cons x.snd xs) (bot := F.bot))
+    k
 
-@[simp] theorem Kahn.snd.unfold_bot {α: Type u} {β: Type v} :
-  @Kahn.snd α β ⊥ = ⊥ := by
-  rw [snd, corec.unfold, Kahn.cases_bot]
+@[simp] theorem ωStream.snd.unfold_bot {α: Type u} {β: Type v} :
+  @ωStream.snd α β ⊥ = ⊥ := by
+  rw [snd, corec.unfold, ωStream.cases_bot]
 
-@[simp] theorem Kahn.snd.unfold_cons
-  {α: Type u} {β: Type v} (x: α × β) (xs : Kahn (α × β)) :
-  @Kahn.snd α β (x ::: xs) = x.snd ::: xs.snd := by
-  rw [snd, corec.unfold, Kahn.cases_cons, cons.injEq]
+@[simp] theorem ωStream.snd.unfold_cons
+  {α: Type u} {β: Type v} (x: α × β) (xs : ωStream (α × β)) :
+  @ωStream.snd α β (x ::: xs) = x.snd ::: xs.snd := by
+  rw [snd, corec.unfold, ωStream.cases_cons, cons.injEq]
   trivial
 
---attribute [eqns Kahn.snd.unfold_cons Kahn.snd.unfold_bot] Kahn.snd
+--attribute [eqns ωStream.snd.unfold_cons ωStream.snd.unfold_bot] ωStream.snd
 
 @[mono]
-theorem Kahn.snd.monotone {α: Type u} {β: Type v} :
-  ∀ x y: Kahn (α × β), x ≤ y → x.snd ≤ y.snd := by
+theorem ωStream.snd.monotone {α: Type u} {β: Type v} :
+  ∀ x y: ωStream (α × β), x ≤ y → x.snd ≤ y.snd := by
   intro a b h₁
-  coinduction generalizing [a, b] using Kahn.le.coind β
+  coinduction generalizing [a, b] using ωStream.le.coind β
   intro a b ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
   induction h₂
@@ -885,15 +897,16 @@ theorem Kahn.snd.monotone {α: Type u} {β: Type v} :
     exists ys
 
 @[simps! coe]
-def OrderHom.Kahn.snd {α: Type u} {β: Type v} : Kahn (α × β) →o Kahn β where
-  toFun := _root_.Kahn.snd
-  monotone' {x y} h := Kahn.snd.monotone x y h
+def OrderHom.ωStream.snd {α: Type u} {β: Type v} :
+  ωStream (α × β) →o ωStream β where
+  toFun := _root_.ωStream.snd
+  monotone' {x y} h := ωStream.snd.monotone x y h
 
-theorem Kahn.snd.continuous {α: Type u} {β: Type v} :
-  OmegaCompletePartialOrder.Continuous (@OrderHom.Kahn.snd α β) := by
-  unfold OrderHom.Kahn.snd
+theorem ωStream.snd.continuous {α: Type u} {β: Type v} :
+  OmegaCompletePartialOrder.Continuous (@OrderHom.ωStream.snd α β) := by
+  unfold OrderHom.ωStream.snd
   intro chain
-  coinduction generalizing [chain] using Kahn.bisim
+  coinduction generalizing [chain] using ωStream.bisim
   rintro s₁ s₂ ⟨chain, h₁, h₂, _⟩
   induction h₁
   induction h₂
@@ -910,7 +923,8 @@ theorem Kahn.snd.continuous {α: Type u} {β: Type v} :
       simp only [Chain.map, OrderHom.comp_coe, OrderHom.coe_mk,
         Function.comp_apply, h, unfold_bot]
   | cons n x xs h =>
-    apply eqF.cons x.snd (ωSup xs).snd (ωSup (OrderHom.comp ⟨snd, snd.monotone⟩ xs))
+    apply eqF.cons x.snd (ωSup xs).snd
+      (ωSup (OrderHom.comp ⟨snd, snd.monotone⟩ xs))
     · rw [ωSup_cons chain n x xs, OrderHom.mk_apply, snd.unfold_cons]
       assumption
     · conv =>
@@ -919,20 +933,22 @@ theorem Kahn.snd.continuous {α: Type u} {β: Type v} :
         rfl
         tactic =>
           intro m
-          simp only [OrderHom.comp_coe, OrderHom.coe_mk, Function.comp_apply, Chain.map]
+          simp only
+            [OrderHom.comp_coe, OrderHom.coe_mk, Function.comp_apply, Chain.map]
           rw [←h m]
           simp [unfold_cons]
     · exists xs
 
 @[simps! apply]
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.snd
-  {α: Type u} {β: Type u} : Kahn (α × β) →𝒄 Kahn β where
-  toFun := _root_.Kahn.snd
-  monotone' := Kahn.snd.monotone
-  cont := Kahn.snd.continuous
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.snd
+  {α: Type u} {β: Type u} : ωStream (α × β) →𝒄 ωStream β where
+  toFun := _root_.ωStream.snd
+  monotone' := ωStream.snd.monotone
+  cont := ωStream.snd.continuous
 
 
-def Kahn.tup {α: Type u} {β: Type v} (k₁: Kahn α) (k₂: Kahn β) : Kahn (α × β) :=
+def ωStream.tup {α: Type u} {β: Type v}
+  (k₁: ωStream α) (k₂: ωStream β) : ωStream (α × β) :=
   corec (fun (x, y) =>
     match dest x, dest y with
     | .bot, _ => F.bot
@@ -940,19 +956,21 @@ def Kahn.tup {α: Type u} {β: Type v} (k₁: Kahn α) (k₂: Kahn β) : Kahn (�
     | .cons x xs, .cons y ys => .cons (x, y) (xs, ys)
   ) (k₁, k₂)
 
-@[simp] theorem Kahn.tup.unfold_bot_left {α: Type u} {β: Type v} (k₂: Kahn β) :
+@[simp] theorem ωStream.tup.unfold_bot_left
+  {α: Type u} {β: Type v} (k₂: ωStream β) :
   @tup α β ⊥ k₂ = ⊥ := by
   rw [tup, corec.unfold]
   simp [dest_bot]
 
-@[simp] theorem Kahn.tup.unfold_bot_right {α: Type u} {β: Type v} (k₁: Kahn α) :
+@[simp] theorem ωStream.tup.unfold_bot_right
+  {α: Type u} {β: Type v} (k₁: ωStream α) :
   @tup α β k₁ ⊥ = ⊥ := by
   rw [tup, corec.unfold]
   simp [dest_bot]
   cases dest k₁ <;> rfl
 
-@[simp] theorem Kahn.tup.unfold_cons
-  {α: Type u} {β: Type v} (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+@[simp] theorem ωStream.tup.unfold_cons
+  {α: Type u} {β: Type v} (x: α) (xs: ωStream α) (y: β) (ys: ωStream β) :
   @tup α β (x ::: xs) (y ::: ys) = (x, y) ::: tup xs ys := by
   rw [tup, corec.unfold]
   have h₁ : dest (x ::: xs) = .cons x xs := by rfl
@@ -960,9 +978,10 @@ def Kahn.tup {α: Type u} {β: Type v} (k₁: Kahn α) (k₂: Kahn β) : Kahn (�
   simp only [h₁, h₂]
   rfl
 
---attribute [eqns Kahn.tup.unfold_cons Kahn.tup.unfold_bot_left Kahn.tup.unfold_bot_right] Kahn.tup
+--attribute [eqns ωStream.tup.unfold_cons ωStream.tup.unfold_bot_left ωStream.tup.unfold_bot_right] ωStream.tup
 
-@[simp] theorem Kahn.tup_fst_snd {α: Type u} {β: Type v} (k: Kahn (α × β)) :
+@[simp] theorem ωStream.tup_fst_snd
+  {α: Type u} {β: Type v} (k: ωStream (α × β)) :
   tup k.fst k.snd = k := by
   coinduction generalizing [k] using bisim
   intro s₁ s₂ ⟨x, h₁, h₂, _⟩
@@ -973,15 +992,16 @@ def Kahn.tup {α: Type u} {β: Type v} (k₁: Kahn α) (k₂: Kahn β) : Kahn (�
     induction h₂
     apply eqF.bot rfl rfl
   | cons x xs =>
-    simp only [fst.unfold_cons, snd.unfold_cons, tup.unfold_cons, Prod.mk.eta] at h₂
+    simp only
+      [fst.unfold_cons, snd.unfold_cons, tup.unfold_cons, Prod.mk.eta] at h₂
     induction h₂
     apply eqF.cons x (tup xs.fst xs.snd) xs rfl rfl
     exists xs
 
-@[mono] theorem Kahn.tup.monotone {α: Type u} {β: Type v} :
-  ∀ (x y: Kahn α) (z w: Kahn β), x ≤ y → z ≤ w → tup x z ≤ tup y w := by
+@[mono] theorem ωStream.tup.monotone {α: Type u} {β: Type v} :
+  ∀ (x y: ωStream α) (z w: ωStream β), x ≤ y → z ≤ w → tup x z ≤ tup y w := by
   intro x y z w h₁ h₂
-  coinduction generalizing [x, y, z, w] using Kahn.le.coind _
+  coinduction generalizing [x, y, z, w] using ωStream.le.coind _
   intro X Y ⟨x, y, z, w, h₁, h₂, h₃, h₄⟩
   induction h₁
   induction h₂
@@ -1011,22 +1031,23 @@ def Kahn.tup {α: Type u} {β: Type v} (k₁: Kahn α) (k₂: Kahn β) : Kahn (�
       exists ws
 
 @[simps! coe]
-def OrderHom.Kahn.tup {α: Type u} {β: Type v} :
-  Kahn α →o Kahn β →o Kahn (α × β) :=
+def OrderHom.ωStream.tup {α: Type u} {β: Type v} :
+  ωStream α →o ωStream β →o ωStream (α × β) :=
   OrderHom.curry
-    { toFun := λ (x, y) => _root_.Kahn.tup x y
-    , monotone' := λ _ _ h => Kahn.tup.monotone _ _ _ _ h.left h.right}
+    { toFun := λ (x, y) => _root_.ωStream.tup x y
+    , monotone' := λ _ _ h => ωStream.tup.monotone _ _ _ _ h.left h.right}
 
-def Kahn.tup.continuous {α : Type u} {β: Type v} :
+def ωStream.tup.continuous {α : Type u} {β: Type v} :
   OmegaCompletePartialOrder.Continuous
-    (OrderHom.curry.symm (@OrderHom.Kahn.tup α β)) := by
+    (OrderHom.curry.symm (@OrderHom.ωStream.tup α β)) := by
   intro chain
-  simp only [OrderIso.symm, OrderHom.curry, OrderHom.Kahn.tup, RelIso.coe_fn_mk,
+  simp only [OrderIso.symm, OrderHom.curry, OrderHom.ωStream.tup, RelIso.coe_fn_mk,
     Equiv.coe_fn_mk, OrderHom.coe_mk, RelIso.coe_fn_symm_mk,
     Equiv.coe_fn_symm_mk, OrderHom.mk_apply, Function.uncurry_curry,
     Prod.instOmegaCompletePartialOrder_ωSup_fst,
     Prod.instOmegaCompletePartialOrder_ωSup_snd]
-  have ⟨(lhs, rhs), h₁⟩ : {p: Chain (Kahn α) × Chain (Kahn β) // p.fst.zip p.snd = chain} :=
+  have ⟨(lhs, rhs), h₁⟩ :
+    {p: Chain (ωStream α) × Chain (ωStream β) // p.fst.zip p.snd = chain} :=
     ⟨(chain.map OrderHom.fst, chain.map OrderHom.snd), by
       apply OrderHom.ext
       funext n
@@ -1037,8 +1058,8 @@ def Kahn.tup.continuous {α : Type u} {β: Type v} :
   have h₂ : (lhs.zip rhs).map OrderHom.snd = rhs := rfl
   simp only [h₁, h₂]
   clear h₁ h₂
-  coinduction generalizing [lhs, rhs] using Kahn.bisim
-  let monoTup : Kahn α × Kahn β →o Kahn (α × β) :=
+  coinduction generalizing [lhs, rhs] using ωStream.bisim
+  let monoTup : ωStream α × ωStream β →o ωStream (α × β) :=
     ⟨λ p => p.1.tup p.2, λ (x, y) (z, t) h => tup.monotone x z y t h.left h.right⟩
   intro s₁ s₂ ⟨lhs, rhs, eq₁, eq₂, _⟩
   induction eq₁
@@ -1047,7 +1068,7 @@ def Kahn.tup.continuous {α : Type u} {β: Type v} :
   | bot h₁ =>
     apply eqF.bot
     rw [ωSup_bot lhs]
-    · rw [Kahn.tup.unfold_bot_left]
+    · rw [ωStream.tup.unfold_bot_left]
     · assumption
     · rw [ωSup_bot]
       intro n
@@ -1059,7 +1080,7 @@ def Kahn.tup.continuous {α : Type u} {β: Type v} :
     | bot h₂ =>
       apply eqF.bot
       rw [ωSup_bot rhs]
-      · rw [Kahn.tup.unfold_bot_right]
+      · rw [ωStream.tup.unfold_bot_right]
       · assumption
       · rw [ωSup_bot]
         intro n
@@ -1088,29 +1109,29 @@ def Kahn.tup.continuous {α : Type u} {β: Type v} :
         exists ys
 
 @[simps! apply]
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.tup {α: Type u} {β: Type v} :
-  Kahn α × Kahn β →𝒄 Kahn (α × β) where
-  toFun := λ (x, y) => _root_.Kahn.tup x y
-  monotone' := λ _ _ ⟨h₁, h₂⟩ => Kahn.tup.monotone _ _ _ _ h₁ h₂
-  cont := Kahn.tup.continuous
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.tup {α: Type u} {β: Type v} :
+  ωStream α × ωStream β →𝒄 ωStream (α × β) where
+  toFun := λ (x, y) => _root_.ωStream.tup x y
+  monotone' := λ _ _ ⟨h₁, h₂⟩ => ωStream.tup.monotone _ _ _ _ h₁ h₂
+  cont := ωStream.tup.continuous
 
-#check Kahn.ωSup_cons
+#check ωStream.ωSup_cons
 
 
-def Kahn.fby (x y: Kahn α) : Kahn α :=
-  Kahn.cases x (cons := λ x _ => x ::: y) (bot := ⊥)
+def ωStream.fby (x y: ωStream α) : ωStream α :=
+  ωStream.cases x (cons := λ x _ => x ::: y) (bot := ⊥)
 
-@[simp] def Kahn.fby.unfold_bot (x: Kahn α) : fby ⊥ x = ⊥ := by
-  rw [fby, Kahn.cases_bot]
+@[simp] def ωStream.fby.unfold_bot (x: ωStream α) : fby ⊥ x = ⊥ := by
+  rw [fby, ωStream.cases_bot]
 
-@[simp] def Kahn.fby.unfold_cons (x : α) (xs y: Kahn α) :
+@[simp] def ωStream.fby.unfold_cons (x : α) (xs y: ωStream α) :
   fby (x ::: xs) y = x ::: y := by
-  rw [fby, Kahn.cases_cons]
+  rw [fby, ωStream.cases_cons]
 
---attribute [eqns Kahn.fby.unfold_bot Kahn.fby.unfold_cons] Kahn.fby
+--attribute [eqns ωStream.fby.unfold_bot ωStream.fby.unfold_cons] ωStream.fby
 
 @[mono]
-theorem Kahn.fby.monotone (x y z w: Kahn α) :
+theorem ωStream.fby.monotone (x y z w: ωStream α) :
   x ≤ y → z ≤ w → fby x z ≤ fby y w := by
   intro h₁ h₂
   rw [le.unfold] at h₁
@@ -1126,18 +1147,20 @@ theorem Kahn.fby.monotone (x y z w: Kahn α) :
     trivial
 
 @[simps! coe]
-def OrderHom.Kahn.fby : Kahn α →o Kahn α →o Kahn α :=
+def OrderHom.ωStream.fby : ωStream α →o ωStream α →o ωStream α :=
   OrderHom.curry
-    {toFun := λ (x, y) => _root_.Kahn.fby x y
-    , monotone' := λ  _ _ ⟨h₁, h₂⟩ => Kahn.fby.monotone _ _ _ _ h₁ h₂}
+    {toFun := λ (x, y) => _root_.ωStream.fby x y
+    , monotone' := λ  _ _ ⟨h₁, h₂⟩ => ωStream.fby.monotone _ _ _ _ h₁ h₂}
 
 
-def Kahn.fby.continuous :
-  OmegaCompletePartialOrder.Continuous (OrderHom.curry.symm (@OrderHom.Kahn.fby α)) := by
+def ωStream.fby.continuous :
+  OmegaCompletePartialOrder.Continuous
+    (OrderHom.curry.symm (@OrderHom.ωStream.fby α)) := by
   intro chain
-  simp only [OrderHom.Kahn.fby, OrderIso.symm_apply_apply, OrderHom.mk_apply,
-    Prod.instOmegaCompletePartialOrder_ωSup_fst, Prod.instOmegaCompletePartialOrder_ωSup_snd]
-  let ⟨(lhs, rhs), h₁⟩ : {p: Chain (Kahn α) × Chain (Kahn α) // p.fst.zip p.snd = chain} :=
+  simp only [OrderHom.ωStream.fby, OrderIso.symm_apply_apply, OrderHom.mk_apply,
+    Prod.instOmegaCompletePartialOrder_ωSup_fst,
+    Prod.instOmegaCompletePartialOrder_ωSup_snd]
+  let ⟨(lhs, rhs), h₁⟩ : {p: Chain (ωStream α) × Chain (ωStream α) // p.fst.zip p.snd = chain} :=
     ⟨(chain.map OrderHom.fst, chain.map OrderHom.snd), by
       apply OrderHom.ext
       funext n
@@ -1168,35 +1191,35 @@ def Kahn.fby.continuous :
       rfl
 
 @[simps! apply]
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.fby
-  : Kahn α × Kahn α →𝒄 Kahn α where
-  toFun := λ (x, y) => _root_.Kahn.fby x y
-  monotone' := λ _ _ ⟨h₁, h₂⟩ => Kahn.fby.monotone _ _ _ _ h₁ h₂
-  cont := Kahn.fby.continuous
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.fby
+  : ωStream α × ωStream α →𝒄 ωStream α where
+  toFun := λ (x, y) => _root_.ωStream.fby x y
+  monotone' := λ _ _ ⟨h₁, h₂⟩ => ωStream.fby.monotone _ _ _ _ h₁ h₂
+  cont := ωStream.fby.continuous
 
-def Kahn.map {α: Type u} {β: Type v} (f: α → β) (x: Kahn α) : Kahn β :=
-  Kahn.corec (λ x =>
-      Kahn.cases x (cons := λ x xs =>
+def ωStream.map {α: Type u} {β: Type v} (f: α → β) (x: ωStream α) : ωStream β :=
+  ωStream.corec (λ x =>
+      ωStream.cases x (cons := λ x xs =>
         .cons (f x) xs
       ) (bot := .bot)
     ) x
 
-@[simp] def Kahn.map.unfold_bot {α: Type u} {β: Type v} (f: α → β) :
+@[simp] def ωStream.map.unfold_bot {α: Type u} {β: Type v} (f: α → β) :
   map f ⊥ = ⊥ := by
-  rw [map, corec.unfold, Kahn.cases_bot]
+  rw [map, corec.unfold, ωStream.cases_bot]
 
-@[simp] def Kahn.map.unfold_cons
-  {α: Type u} {β: Type v} (f: α → β) (x: α) (xs: Kahn α) :
+@[simp] def ωStream.map.unfold_cons
+  {α: Type u} {β: Type v} (f: α → β) (x: α) (xs: ωStream α) :
   map f (x ::: xs) = f x ::: map f xs := by
-  rw [map, corec.unfold, Kahn.cases_cons]
+  rw [map, corec.unfold, ωStream.cases_cons]
   rfl
 
---attribute [eqns Kahn.map.unfold_bot Kahn.map.unfold_cons] Kahn.map
+--attribute [eqns ωStream.map.unfold_bot ωStream.map.unfold_cons] ωStream.map
 
-@[mono] theorem Kahn.map.monotone {α: Type u} {β: Type v} (f: α → β) :
+@[mono] theorem ωStream.map.monotone {α: Type u} {β: Type v} (f: α → β) :
   ∀ x y, x ≤ y → map f x ≤ map f y := by
   intro x y h₁
-  coinduction generalizing [x, y] using Kahn.le.coind _
+  coinduction generalizing [x, y] using ωStream.le.coind _
   intro _ _ ⟨x, y, h₁, h₂, h₃⟩
   induction h₁
   induction h₂
@@ -1216,15 +1239,16 @@ def Kahn.map {α: Type u} {β: Type v} (f: α → β) (x: Kahn α) : Kahn β :=
     exists ys
 
 @[simps! coe]
-def OrderHom.Kahn.map {α: Type u} {β: Type v} (f: α → β) : Kahn α →o Kahn β where
-  toFun := _root_.Kahn.map f
-  monotone' := Kahn.map.monotone f
+def OrderHom.ωStream.map {α: Type u} {β: Type v} (f: α → β) :
+  ωStream α →o ωStream β where
+  toFun := _root_.ωStream.map f
+  monotone' := ωStream.map.monotone f
 
-def Kahn.map.continuous {α: Type u} {β: Type v} (f: α → β) :
-  OmegaCompletePartialOrder.Continuous (OrderHom.Kahn.map f) := by
+def ωStream.map.continuous {α: Type u} {β: Type v} (f: α → β) :
+  OmegaCompletePartialOrder.Continuous (OrderHom.ωStream.map f) := by
   intro chain
-  unfold OrderHom.Kahn.map
-  coinduction generalizing [chain] using Kahn.bisim
+  unfold OrderHom.ωStream.map
+  coinduction generalizing [chain] using ωStream.bisim
   intro s₁ s₂ ⟨chain, eq₁, eq₂, h⟩
   clear h
   induction eq₁
@@ -1240,27 +1264,28 @@ def Kahn.map.continuous {α: Type u} {β: Type v} (f: α → β) :
   | cons n x xs h₁ =>
     apply eqF.cons
       (f x) (map f (ωSup xs))
-      (ωSup (xs.map ⟨Kahn.map f, Kahn.map.monotone f⟩))
+      (ωSup (xs.map ⟨ωStream.map f, ωStream.map.monotone f⟩))
     · rw [OrderHom.mk_apply, ωSup_cons chain n x xs]
       · rw [map.unfold_cons]
       · assumption
     · rw [ωSup_cons (chain.map _) n (f x) (xs.map ⟨map f, map.monotone f⟩)]
-      simp only [Chain.map, OrderHom.comp_coe, OrderHom.coe_mk, Function.comp_apply]
+      simp only
+        [Chain.map, OrderHom.comp_coe, OrderHom.coe_mk, Function.comp_apply]
       intro k
       rw [←h₁ k, map.unfold_cons]
     · exists xs
 
 @[simps! apply]
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.map
-  {α: Type u} {β: Type v} (f: α → β) : Kahn α →𝒄 Kahn β where
-  toFun := _root_.Kahn.map f
-  monotone' := Kahn.map.monotone f
-  cont := Kahn.map.continuous f
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.map
+  {α: Type u} {β: Type v} (f: α → β) : ωStream α →𝒄 ωStream β where
+  toFun := _root_.ωStream.map f
+  monotone' := ωStream.map.monotone f
+  cont := ωStream.map.continuous f
 
-def Kahn.const (x: α) : Kahn α :=
+def ωStream.const (x: α) : ωStream α :=
   corec (λ _ => .cons x Unit.unit) Unit.unit
 
-def Kahn.const.unfold (x: α) : const x = (x ::: const x) := by
+def ωStream.const.unfold (x: α) : const x = (x ::: const x) := by
   conv =>
     lhs
     simp only [const]
@@ -1271,59 +1296,64 @@ def Kahn.const.unfold (x: α) : const x = (x ::: const x) := by
 
 -- Addition of kahn networks
 instance {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] :
-  HAdd (Kahn α) (Kahn β) (Kahn γ) where
-  hAdd k₁ k₂ := Kahn.map (Function.uncurry HAdd.hAdd) (Kahn.tup k₁ k₂)
+  HAdd (ωStream α) (ωStream β) (ωStream γ) where
+  hAdd k₁ k₂ := ωStream.map (Function.uncurry HAdd.hAdd) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.add.unfold_bot_left
-  {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] (x: Kahn β) :
-  (⊥ : Kahn α) + x = ⊥ := by simp [HAdd.hAdd]
+@[simp] def ωStream.add.unfold_bot_left
+  {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] (x: ωStream β) :
+  (⊥ : ωStream α) + x = ⊥ := by simp [HAdd.hAdd]
 
-@[simp] def Kahn.add.unfold_bot_right
-  {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] (x: Kahn α) :
-  x + (⊥ : Kahn β) = ⊥ := by simp [HAdd.hAdd]
+@[simp] def ωStream.add.unfold_bot_right
+  {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] (x: ωStream α) :
+  x + (⊥ : ωStream β) = ⊥ := by simp [HAdd.hAdd]
 
-@[simp] def Kahn.add.unfold_cons
+@[simp] def ωStream.add.unfold_cons
   {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ]
-  (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x: α) (xs: ωStream α) (y: β) (ys: ωStream β) :
   (x ::: xs) + (y ::: ys) = (x + y) ::: (xs + ys) := by simp [HAdd.hAdd]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.add
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.add
   {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ] :
-  Kahn α × Kahn β →𝒄 Kahn γ :=
-  (ContinuousHom.Kahn.map (Function.uncurry HAdd.hAdd)).comp ContinuousHom.Kahn.tup
+  ωStream α × ωStream β →𝒄 ωStream γ :=
+  (ContinuousHom.ωStream.map (Function.uncurry HAdd.hAdd)).comp
+    ContinuousHom.ωStream.tup
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.add_apply
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.add_apply
   {α: Type u} {β: Type v} {γ: Type w} [HAdd α β γ]
-  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.add (x, y) = x + y := rfl
+  (x: ωStream α) (y: ωStream β) : ContinuousHom.ωStream.add (x, y) = x + y
+  := rfl
 
 
 
 
 -- Substraction of kahn networks
 instance {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] :
-  HSub (Kahn α) (Kahn β) (Kahn γ) where
-  hSub k₁ k₂ := Kahn.map (Function.uncurry HSub.hSub) (Kahn.tup k₁ k₂)
+  HSub (ωStream α) (ωStream β) (ωStream γ) where
+  hSub k₁ k₂ := ωStream.map (Function.uncurry HSub.hSub) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.sub.unfold_bot_left
-  {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] (x: Kahn β) :
-  (⊥ : Kahn α) - x = ⊥ := by simp [HSub.hSub]
+@[simp] def ωStream.sub.unfold_bot_left
+  {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] (x: ωStream β) :
+  (⊥ : ωStream α) - x = ⊥ := by simp [HSub.hSub]
 
-@[simp] def Kahn.sub.unfold_bot_right
-  {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] (x: Kahn α) :
-  x - (⊥ : Kahn β) = ⊥ := by simp [HSub.hSub]
+@[simp] def ωStream.sub.unfold_bot_right
+  {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] (x: ωStream α) :
+  x - (⊥ : ωStream β) = ⊥ := by simp [HSub.hSub]
 
-@[simp] def Kahn.sub.unfold_cons
+@[simp] def ωStream.sub.unfold_cons
   {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ]
-  (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x: α) (xs: ωStream α) (y: β) (ys: ωStream β) :
   (x ::: xs) - (y ::: ys) = (x - y) ::: (xs - ys) := by simp [HSub.hSub]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.sub
-  {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ] : Kahn α × Kahn β →𝒄 Kahn γ :=
-  (ContinuousHom.Kahn.map (Function.uncurry HSub.hSub)).comp ContinuousHom.Kahn.tup
-
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.sub_apply
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.sub
   {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ]
-  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.sub (x, y) = x - y := rfl
+  : ωStream α × ωStream β →𝒄 ωStream γ :=
+  (ContinuousHom.ωStream.map (Function.uncurry HSub.hSub)).comp
+    ContinuousHom.ωStream.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.sub_apply
+  {α: Type u} {β: Type v} {γ: Type w} [HSub α β γ]
+  (x: ωStream α) (y: ωStream β) : ContinuousHom.ωStream.sub (x, y) = x - y
+  := rfl
 
 
 
@@ -1331,226 +1361,273 @@ def OmegaCompletePartialOrder.ContinuousHom.Kahn.sub
 
 -- Multiplication of kahn networks
 instance {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] :
-  HMul (Kahn α) (Kahn β) (Kahn γ) where
-  hMul k₁ k₂ := Kahn.map (Function.uncurry HMul.hMul) (Kahn.tup k₁ k₂)
+  HMul (ωStream α) (ωStream β) (ωStream γ) where
+  hMul k₁ k₂ := ωStream.map (Function.uncurry HMul.hMul) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.mul.unfold_bot_left
-  {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] (x: Kahn β) :
-  (⊥ : Kahn α) * x = ⊥ := by simp [HMul.hMul]
+@[simp] def ωStream.mul.unfold_bot_left
+  {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] (x: ωStream β) :
+  (⊥ : ωStream α) * x = ⊥ := by simp [HMul.hMul]
 
-@[simp] def Kahn.mul.unfold_bot_right
-  {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] (x: Kahn α) :
-  x * (⊥ : Kahn β) = ⊥ := by simp [HMul.hMul]
+@[simp] def ωStream.mul.unfold_bot_right
+  {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] (x: ωStream α) :
+  x * (⊥ : ωStream β) = ⊥ := by simp [HMul.hMul]
 
-@[simp] def Kahn.mul.unfold_cons
+@[simp] def ωStream.mul.unfold_cons
   {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ]
-  (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x: α) (xs: ωStream α) (y: β) (ys: ωStream β) :
   (x ::: xs) * (y ::: ys) = (x * y) ::: (xs * ys) := by simp [HMul.hMul]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.mul
-  {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ] : Kahn α × Kahn β →𝒄 Kahn γ :=
-  (ContinuousHom.Kahn.map (Function.uncurry HMul.hMul)).comp ContinuousHom.Kahn.tup
-
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mul_apply
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.mul
   {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ]
-  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.mul (x, y) = x * y := rfl
+  : ωStream α × ωStream β →𝒄 ωStream γ :=
+  (ContinuousHom.ωStream.map (Function.uncurry HMul.hMul)).comp
+    ContinuousHom.ωStream.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.mul_apply
+  {α: Type u} {β: Type v} {γ: Type w} [HMul α β γ]
+  (x: ωStream α) (y: ωStream β) : ContinuousHom.ωStream.mul (x, y) = x * y
+  := rfl
 
 
 
 -- Division of kahn networks
 instance {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] :
-  HDiv (Kahn α) (Kahn β) (Kahn γ) where
-  hDiv k₁ k₂ := Kahn.map (Function.uncurry HDiv.hDiv) (Kahn.tup k₁ k₂)
+  HDiv (ωStream α) (ωStream β) (ωStream γ) where
+  hDiv k₁ k₂ := ωStream.map (Function.uncurry HDiv.hDiv) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.div.unfold_bot_left
-  {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] (x: Kahn β) :
-  (⊥ : Kahn α) / x = ⊥ := by simp [HDiv.hDiv]
+@[simp] def ωStream.div.unfold_bot_left
+  {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] (x: ωStream β) :
+  (⊥ : ωStream α) / x = ⊥ := by simp [HDiv.hDiv]
 
-@[simp] def Kahn.div.unfold_bot_right
-  {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] (x: Kahn α) :
-  x / (⊥ : Kahn β) = ⊥ := by simp [HDiv.hDiv]
+@[simp] def ωStream.div.unfold_bot_right
+  {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] (x: ωStream α) :
+  x / (⊥ : ωStream β) = ⊥ := by simp [HDiv.hDiv]
 
-@[simp] def Kahn.div.unfold_cons
+@[simp] def ωStream.div.unfold_cons
   {α: Type u} {β: Type v} {γ: Type w}
-  [HDiv α β γ] (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  [HDiv α β γ] (x: α) (xs: ωStream α) (y: β) (ys: ωStream β) :
   (x ::: xs) / (y ::: ys) = (x / y) ::: (xs / ys) := by simp [HDiv.hDiv]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.div
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.div
   {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ] :
-  Kahn α × Kahn β →𝒄 Kahn γ :=
-  (ContinuousHom.Kahn.map (Function.uncurry HDiv.hDiv)).comp ContinuousHom.Kahn.tup
+  ωStream α × ωStream β →𝒄 ωStream γ :=
+  (ContinuousHom.ωStream.map (Function.uncurry HDiv.hDiv)).comp
+    ContinuousHom.ωStream.tup
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.div_apply
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.div_apply
   {α: Type u} {β: Type v} {γ: Type w} [HDiv α β γ]
-  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.div (x, y) = x / y := rfl
+  (x: ωStream α) (y: ωStream β) : ContinuousHom.ωStream.div (x, y) = x / y
+  := rfl
 
 
 
 -- Modular arithmetic over kahn networks
 instance {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] :
-  HMod (Kahn α) (Kahn β) (Kahn γ) where
-  hMod k₁ k₂ := Kahn.map (Function.uncurry HMod.hMod) (Kahn.tup k₁ k₂)
+  HMod (ωStream α) (ωStream β) (ωStream γ) where
+  hMod k₁ k₂ := ωStream.map (Function.uncurry HMod.hMod) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.mod.unfold_bot_left
-  {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] (x: Kahn β) :
-  (⊥ : Kahn α) % x = ⊥ := by simp [HMod.hMod]
+@[simp] def ωStream.mod.unfold_bot_left
+  {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] (x: ωStream β) :
+  (⊥ : ωStream α) % x = ⊥ := by simp [HMod.hMod]
 
-@[simp] def Kahn.mod.unfold_bot_right
-  {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] (x: Kahn α) :
-  x % (⊥ : Kahn β) = ⊥ := by simp [HMod.hMod]
+@[simp] def ωStream.mod.unfold_bot_right
+  {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] (x: ωStream α) :
+  x % (⊥ : ωStream β) = ⊥ := by simp [HMod.hMod]
 
-@[simp] def Kahn.mod.unfold_cons
+@[simp] def ωStream.mod.unfold_cons
   {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ]
-  (x: α) (xs: Kahn α) (y: β) (ys: Kahn β) :
+  (x: α) (xs: ωStream α) (y: β) (ys: ωStream β) :
   (x ::: xs) % (y ::: ys) = (x % y) ::: (xs % ys) := by simp [HMod.hMod]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.mod
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.mod
   {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ] :
-  Kahn α × Kahn β →𝒄 Kahn γ :=
-  (ContinuousHom.Kahn.map (Function.uncurry HMod.hMod)).comp ContinuousHom.Kahn.tup
+  ωStream α × ωStream β →𝒄 ωStream γ :=
+  (ContinuousHom.ωStream.map (Function.uncurry HMod.hMod)).comp
+    ContinuousHom.ωStream.tup
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mod_apply
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.mod_apply
   {α: Type u} {β: Type v} {γ: Type w} [HMod α β γ]
-  (x: Kahn α) (y: Kahn β) : ContinuousHom.Kahn.mod (x, y) = x % y := rfl
+  (x: ωStream α) (y: ωStream β) : ContinuousHom.ωStream.mod (x, y) = x % y
+  := rfl
 
 
-def Kahn.and : Kahn Prop → Kahn Prop → Kahn Prop := λ k₁ k₂ =>
-  Kahn.map (Function.uncurry And) (Kahn.tup k₁ k₂)
+def ωStream.and : ωStream Prop → ωStream Prop → ωStream Prop := λ k₁ k₂ =>
+  ωStream.map (Function.uncurry And) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.and.unfold_bot_left (x: Kahn Prop) :
-  Kahn.and ⊥ x = ⊥ := by simp [Kahn.and]
+@[simp] def ωStream.and.unfold_bot_left (x: ωStream Prop) :
+  ωStream.and ⊥ x = ⊥ := by simp [ωStream.and]
 
-@[simp] def Kahn.and.unfold_bot_right (x: Kahn Prop) :
-  Kahn.and x ⊥ = ⊥ := by simp [Kahn.and]
+@[simp] def ωStream.and.unfold_bot_right (x: ωStream Prop) :
+  ωStream.and x ⊥ = ⊥ := by simp [ωStream.and]
 
-@[simp] def Kahn.and.unfold_cons (x: Prop) (xs: Kahn Prop) (y: Prop) (ys: Kahn Prop) :
-  Kahn.and (x ::: xs) (y ::: ys) = (x ∧ y) ::: Kahn.and xs ys := by simp [Kahn.and]
+@[simp] def ωStream.and.unfold_cons
+  (x: Prop) (xs: ωStream Prop) (y: Prop) (ys: ωStream Prop) :
+  ωStream.and (x ::: xs) (y ::: ys) = (x ∧ y) ::: ωStream.and xs ys
+  := by simp [ωStream.and]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.and : Kahn Prop × Kahn Prop →𝒄 Kahn Prop :=
-  (ContinuousHom.Kahn.map (Function.uncurry And)).comp ContinuousHom.Kahn.tup
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.and
+  : ωStream Prop × ωStream Prop →𝒄 ωStream Prop :=
+  (ContinuousHom.ωStream.map (Function.uncurry And)).comp
+    ContinuousHom.ωStream.tup
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.and_apply (x: Kahn Prop) (y: Kahn Prop) :
-  ContinuousHom.Kahn.and (x, y) = _root_.Kahn.and x y := rfl
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.and_apply
+  (x: ωStream Prop) (y: ωStream Prop) :
+  ContinuousHom.ωStream.and (x, y) = _root_.ωStream.and x y
+  := rfl
 
 
 
-def Kahn.not : Kahn Prop → Kahn Prop := λ k₁ =>
-  Kahn.map Not k₁
+def ωStream.not : ωStream Prop → ωStream Prop := λ k₁ =>
+  ωStream.map Not k₁
 
-@[simp] def Kahn.not.unfold_bot :
-  Kahn.not ⊥ = ⊥ := by simp [Kahn.not]
+@[simp] def ωStream.not.unfold_bot :
+  ωStream.not ⊥ = ⊥ := by simp [ωStream.not]
 
-@[simp] def Kahn.not.unfold_cons (x: Prop) (xs: Kahn Prop) :
-  Kahn.not (x ::: xs) = (¬x) ::: Kahn.not xs := by simp [Kahn.not]
+@[simp] def ωStream.not.unfold_cons (x: Prop) (xs: ωStream Prop) :
+  ωStream.not (x ::: xs) = (¬x) ::: ωStream.not xs := by simp [ωStream.not]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.not : Kahn Prop →𝒄 Kahn Prop :=
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.not :
+  ωStream Prop →𝒄 ωStream Prop :=
   map Not
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.not_apply (x: Kahn Prop) :
-  ContinuousHom.Kahn.not x = _root_.Kahn.not x := rfl
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.not_apply
+  (x: ωStream Prop) : ContinuousHom.ωStream.not x = _root_.ωStream.not x
+  := rfl
 
 
 
 
-def Kahn.or : Kahn Prop → Kahn Prop → Kahn Prop := λ k₁ k₂ =>
-  Kahn.map (Function.uncurry Or) (Kahn.tup k₁ k₂)
+def ωStream.or : ωStream Prop → ωStream Prop → ωStream Prop := λ k₁ k₂ =>
+  ωStream.map (Function.uncurry Or) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.or.unfold_bot_left (x: Kahn Prop) :
-  Kahn.or ⊥ x = ⊥ := by simp [Kahn.or]
+@[simp] def ωStream.or.unfold_bot_left (x: ωStream Prop) :
+  ωStream.or ⊥ x = ⊥ := by simp [ωStream.or]
 
-@[simp] def Kahn.or.unfold_bot_right (x: Kahn Prop) :
-  Kahn.or x ⊥ = ⊥ := by simp [Kahn.or]
+@[simp] def ωStream.or.unfold_bot_right (x: ωStream Prop) :
+  ωStream.or x ⊥ = ⊥ := by simp [ωStream.or]
 
-@[simp] def Kahn.or.unfold_cons (x: Prop) (xs: Kahn Prop) (y: Prop) (ys: Kahn Prop) :
-  Kahn.or (x ::: xs) (y ::: ys) = (x ∨ y) ::: Kahn.or xs ys := by simp [Kahn.or]
+@[simp] def ωStream.or.unfold_cons
+  (x: Prop) (xs: ωStream Prop) (y: Prop) (ys: ωStream Prop) :
+  ωStream.or (x ::: xs) (y ::: ys) = (x ∨ y) ::: ωStream.or xs ys
+  := by simp [ωStream.or]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.or : Kahn Prop × Kahn Prop →𝒄 Kahn Prop :=
-  (ContinuousHom.Kahn.map (Function.uncurry Or)).comp ContinuousHom.Kahn.tup
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.or
+  : ωStream Prop × ωStream Prop →𝒄 ωStream Prop :=
+  (ContinuousHom.ωStream.map (Function.uncurry Or)).comp
+    ContinuousHom.ωStream.tup
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.or_apply (x: Kahn Prop) (y: Kahn Prop) :
-  ContinuousHom.Kahn.or (x, y) = _root_.Kahn.or x y := rfl
-
-
-
-
-
-def Kahn.eq : Kahn α → Kahn α → Kahn Prop := λ k₁ k₂ =>
-  Kahn.map (Function.uncurry Eq) (Kahn.tup k₁ k₂)
-
-@[simp] def Kahn.eq.unfold_bot_left (x: Kahn α) :
-  Kahn.eq ⊥ x = ⊥ := by simp [Kahn.eq]
-
-@[simp] def Kahn.eq.unfold_bot_right (x: Kahn α) :
-  Kahn.eq x ⊥ = ⊥ := by simp [Kahn.eq]
-
-@[simp] def Kahn.eq.unfold_cons (x: α) (xs: Kahn α) (y: α) (ys: Kahn α) :
-  Kahn.eq (x ::: xs) (y ::: ys) = (x = y) ::: Kahn.eq xs ys := by simp [Kahn.eq]
-
-def OmegaCompletePartialeqder.ContinuousHom.Kahn.eq : Kahn α × Kahn α →𝒄 Kahn Prop :=
-  (ContinuousHom.Kahn.map (Function.uncurry Eq)).comp ContinuousHom.Kahn.tup
-
-@[simp] def OmegaCompletePartialeqder.ContinuousHom.Kahn.eq_apply (x: Kahn α) (y: Kahn α) :
-  ContinuousHom.Kahn.eq (x, y) = _root_.Kahn.eq x y := rfl
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.or_apply
+  (x: ωStream Prop) (y: ωStream Prop) :
+  ContinuousHom.ωStream.or (x, y) = _root_.ωStream.or x y
+  := rfl
 
 
 
 
 
-def Kahn.le [LE α] : Kahn α → Kahn α → Kahn Prop := λ k₁ k₂ =>
-  Kahn.map (Function.uncurry LE.le) (Kahn.tup k₁ k₂)
+def ωStream.eq : ωStream α → ωStream α → ωStream Prop := λ k₁ k₂ =>
+  ωStream.map (Function.uncurry Eq) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.le.unfold_bot_left [LE α] (x: Kahn α) :
-  Kahn.le ⊥ x = ⊥ := by simp [Kahn.le]
+@[simp] def ωStream.eq.unfold_bot_left (x: ωStream α) :
+  ωStream.eq ⊥ x = ⊥ := by simp [ωStream.eq]
 
-@[simp] def Kahn.le.unfold_bot_right [LE α] (x: Kahn α) :
-  Kahn.le x ⊥ = ⊥ := by simp [Kahn.le]
+@[simp] def ωStream.eq.unfold_bot_right (x: ωStream α) :
+  ωStream.eq x ⊥ = ⊥ := by simp [ωStream.eq]
 
-@[simp] def Kahn.le.unfold_cons [LE α] (x: α) (xs: Kahn α) (y: α) (ys: Kahn α) :
-  Kahn.le (x ::: xs) (y ::: ys) = (x ≤ y) ::: Kahn.le xs ys := by simp [Kahn.le]
+@[simp] def ωStream.eq.unfold_cons
+  (x: α) (xs: ωStream α) (y: α) (ys: ωStream α) :
+  ωStream.eq (x ::: xs) (y ::: ys) = (x = y) ::: ωStream.eq xs ys
+  := by simp [ωStream.eq]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.le [LE α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
-  (ContinuousHom.Kahn.map (Function.uncurry LE.le)).comp ContinuousHom.Kahn.tup
+def OmegaCompletePartialeqder.ContinuousHom.ωStream.eq :
+  ωStream α × ωStream α →𝒄 ωStream Prop :=
+  (ContinuousHom.ωStream.map (Function.uncurry Eq)).comp
+    ContinuousHom.ωStream.tup
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.le_apply [LE α] (x: Kahn α) (y: Kahn α) :
-  ContinuousHom.Kahn.le (x, y) = _root_.Kahn.le x y := rfl
-
-@[simp] def Kahn.ge [LE α] (x y: Kahn α) := Kahn.le y x
-
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.ge [LE α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
-  ContinuousHom.Kahn.le.comp (ContinuousHom.Prod.prod ContinuousHom.Prod.snd ContinuousHom.Prod.fst)
-
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.ge_apply [LE α] (x: Kahn α) (y: Kahn α) :
-  ContinuousHom.Kahn.ge (x, y) = _root_.Kahn.ge x y := rfl
+@[simp] def OmegaCompletePartialeqder.ContinuousHom.ωStream.eq_apply
+  (x: ωStream α) (y: ωStream α) :
+  ContinuousHom.ωStream.eq (x, y) = _root_.ωStream.eq x y
+  := rfl
 
 
 
 
 
-def Kahn.lt [LT α] : Kahn α → Kahn α → Kahn Prop := λ k₁ k₂ =>
-  Kahn.map (Function.uncurry LT.lt) (Kahn.tup k₁ k₂)
+def ωStream.le [LE α] : ωStream α → ωStream α → ωStream Prop := λ k₁ k₂ =>
+  ωStream.map (Function.uncurry LE.le) (ωStream.tup k₁ k₂)
 
-@[simp] def Kahn.lt.unfold_bot_left [LT α] (x: Kahn α) :
-  Kahn.lt ⊥ x = ⊥ := by simp [Kahn.lt]
+@[simp] def ωStream.le.unfold_bot_left [LE α] (x: ωStream α) :
+  ωStream.le ⊥ x = ⊥ := by simp [ωStream.le]
 
-@[simp] def Kahn.lt.unfold_bot_right [LT α] (x: Kahn α) :
-  Kahn.lt x ⊥ = ⊥ := by simp [Kahn.lt]
+@[simp] def ωStream.le.unfold_bot_right [LE α] (x: ωStream α) :
+  ωStream.le x ⊥ = ⊥ := by simp [ωStream.le]
 
-@[simp] def Kahn.lt.unfold_cons [LT α] (x: α) (xs: Kahn α) (y: α) (ys: Kahn α) :
-  Kahn.lt (x ::: xs) (y ::: ys) = (x < y) ::: Kahn.lt xs ys := by simp [Kahn.lt]
+@[simp] def ωStream.le.unfold_cons [LE α]
+  (x: α) (xs: ωStream α) (y: α) (ys: ωStream α) :
+  ωStream.le (x ::: xs) (y ::: ys) = (x ≤ y) ::: ωStream.le xs ys
+  := by simp [ωStream.le]
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.lt [LT α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
-  (ContinuousHom.Kahn.map (Function.uncurry LT.lt)).comp ContinuousHom.Kahn.tup
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.le [LE α] :
+  ωStream α × ωStream α →𝒄 ωStream Prop :=
+  (ContinuousHom.ωStream.map (Function.uncurry LE.le)).comp
+    ContinuousHom.ωStream.tup
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.lt_apply [LT α] (x: Kahn α) (y: Kahn α) :
-  ContinuousHom.Kahn.lt (x, y) = _root_.Kahn.lt x y := rfl
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.le_apply [LE α]
+  (x: ωStream α) (y: ωStream α) :
+  ContinuousHom.ωStream.le (x, y) = _root_.ωStream.le x y
+  := rfl
 
-@[simp] def Kahn.gt [LT α] (x y: Kahn α) := Kahn.lt y x
+@[simp] def ωStream.ge [LE α] (x y: ωStream α) := ωStream.le y x
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.gt [LT α] : Kahn α × Kahn α →𝒄 Kahn Prop :=
-  ContinuousHom.Kahn.lt.comp (ContinuousHom.Prod.prod ContinuousHom.Prod.snd ContinuousHom.Prod.fst)
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.ge [LE α] :
+  ωStream α × ωStream α →𝒄 ωStream Prop :=
+  ContinuousHom.ωStream.le.comp
+    (ContinuousHom.Prod.prod ContinuousHom.Prod.snd ContinuousHom.Prod.fst)
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.gt_apply [LT α] (x: Kahn α) (y: Kahn α) :
-  ContinuousHom.Kahn.gt (x, y) = _root_.Kahn.gt x y := rfl
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.ge_apply [LE α]
+  (x: ωStream α) (y: ωStream α) :
+  ContinuousHom.ωStream.ge (x, y) = _root_.ωStream.ge x y
+  := rfl
+
+
+
+
+
+def ωStream.lt [LT α] : ωStream α → ωStream α → ωStream Prop := λ k₁ k₂ =>
+  ωStream.map (Function.uncurry LT.lt) (ωStream.tup k₁ k₂)
+
+@[simp] def ωStream.lt.unfold_bot_left [LT α] (x: ωStream α) :
+  ωStream.lt ⊥ x = ⊥ := by simp [ωStream.lt]
+
+@[simp] def ωStream.lt.unfold_bot_right [LT α] (x: ωStream α) :
+  ωStream.lt x ⊥ = ⊥ := by simp [ωStream.lt]
+
+@[simp] def ωStream.lt.unfold_cons [LT α]
+  (x: α) (xs: ωStream α) (y: α) (ys: ωStream α) :
+  ωStream.lt (x ::: xs) (y ::: ys) = (x < y) ::: ωStream.lt xs ys
+  := by simp [ωStream.lt]
+
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.lt [LT α] :
+  ωStream α × ωStream α →𝒄 ωStream Prop :=
+  (ContinuousHom.ωStream.map (Function.uncurry LT.lt)).comp
+    ContinuousHom.ωStream.tup
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.lt_apply [LT α]
+  (x: ωStream α) (y: ωStream α) :
+  ContinuousHom.ωStream.lt (x, y) = _root_.ωStream.lt x y
+  := rfl
+
+@[simp] def ωStream.gt [LT α] (x y: ωStream α) := ωStream.lt y x
+
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.gt [LT α] :
+  ωStream α × ωStream α →𝒄 ωStream Prop :=
+  ContinuousHom.ωStream.lt.comp
+    (ContinuousHom.Prod.prod ContinuousHom.Prod.snd ContinuousHom.Prod.fst)
+
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.gt_apply [LT α]
+  (x: ωStream α) (y: ωStream α) :
+  ContinuousHom.ωStream.gt (x, y) = _root_.ωStream.gt x y
+  := rfl
 
 
 
@@ -1558,61 +1635,63 @@ def OmegaCompletePartialOrder.ContinuousHom.Kahn.gt [LT α] : Kahn α × Kahn α
 
 
 -- Defintion of mux (if then else operators) over kahn networks
-noncomputable def Kahn.mux (x: Kahn Prop) (y z: Kahn α) : Kahn α :=
-  Kahn.map
+noncomputable def ωStream.mux (x: ωStream Prop) (y z: ωStream α) : ωStream α :=
+  ωStream.map
     (λ ⟨a, b, c⟩ => @ite _ a (Classical.propDecidable a) b c)
-    (Kahn.tup x (Kahn.tup y z))
+    (ωStream.tup x (ωStream.tup y z))
 
-@[simp] def Kahn.mux.unfold_bot_cond (y z: Kahn α) : Kahn.mux ⊥ y z = ⊥ :=
-  by simp [Kahn.mux]
+@[simp] def ωStream.mux.unfold_bot_cond
+  (y z: ωStream α) : ωStream.mux ⊥ y z = ⊥ :=
+  by simp [ωStream.mux]
 
-@[simp] def Kahn.mux.unfold_bot_left (x: Kahn Prop) (z: Kahn α)
-  : Kahn.mux x ⊥ z = ⊥ := by
-  simp [Kahn.mux]
+@[simp] def ωStream.mux.unfold_bot_left (x: ωStream Prop) (z: ωStream α)
+  : ωStream.mux x ⊥ z = ⊥ := by
+  simp [ωStream.mux]
 
-@[simp] def Kahn.mux.unfold_bot_right (x: Kahn Prop) (y: Kahn α) :
-  Kahn.mux x y ⊥ = ⊥ := by
-  simp [Kahn.mux]
+@[simp] def ωStream.mux.unfold_bot_right (x: ωStream Prop) (y: ωStream α) :
+  ωStream.mux x y ⊥ = ⊥ := by
+  simp [ωStream.mux]
 
-@[simp] def Kahn.mux.unfold_cons_true (y z: α) (xs: Kahn Prop) (ys zs: Kahn α) :
-  Kahn.mux (True ::: xs) (y ::: ys) (z ::: zs) = y ::: (xs.mux ys zs) := by
-  simp [Kahn.mux]
+@[simp] def ωStream.mux.unfold_cons_true
+  (y z: α) (xs: ωStream Prop) (ys zs: ωStream α) :
+  ωStream.mux (True ::: xs) (y ::: ys) (z ::: zs) = y ::: (xs.mux ys zs) := by
+  simp [ωStream.mux]
 
-@[simp] def Kahn.mux.unfold_cons_false
-  (y z: α) (xs: Kahn Prop) (ys zs: Kahn α) :
-  Kahn.mux (False ::: xs) (y ::: ys) (z ::: zs) = z ::: (xs.mux ys zs) := by
-  simp [Kahn.mux]
+@[simp] def ωStream.mux.unfold_cons_false
+  (y z: α) (xs: ωStream Prop) (ys zs: ωStream α) :
+  ωStream.mux (False ::: xs) (y ::: ys) (z ::: zs) = z ::: (xs.mux ys zs) := by
+  simp [ωStream.mux]
 
-noncomputable def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux :
-  Kahn Prop × Kahn α × Kahn α →𝒄 Kahn α :=
-  (ContinuousHom.Kahn.map
+noncomputable def OmegaCompletePartialOrder.ContinuousHom.ωStream.mux :
+  ωStream Prop × ωStream α × ωStream α →𝒄 ωStream α :=
+  (ContinuousHom.ωStream.map
     (λ ⟨a, b, c⟩ => @ite _ a (Classical.propDecidable a) b c)).comp (
-    ContinuousHom.Kahn.tup.comp (ContinuousHom.Prod.prod
+    ContinuousHom.ωStream.tup.comp (ContinuousHom.Prod.prod
       ContinuousHom.Prod.fst
-      (ContinuousHom.Kahn.tup.comp ContinuousHom.Prod.snd)
+      (ContinuousHom.ωStream.tup.comp ContinuousHom.Prod.snd)
     ))
 
-@[simp] def OmegaCompletePartialOrder.ContinuousHom.Kahn.mux_apply
-  (x: Kahn Prop) (y z: Kahn α) :
-  ContinuousHom.Kahn.mux (x, y, z) = x.mux y z
+@[simp] def OmegaCompletePartialOrder.ContinuousHom.ωStream.mux_apply
+  (x: ωStream Prop) (y z: ωStream α) :
+  ContinuousHom.ωStream.mux (x, y, z) = x.mux y z
   := rfl
 
 
-def Kahn.next (x: Kahn α) : Kahn α :=
-  Kahn.cases (bot := .bot) (cons := λ _ xs => xs) x
+def ωStream.next (x: ωStream α) : ωStream α :=
+  ωStream.cases (bot := .bot) (cons := λ _ xs => xs) x
 
-@[simp] def Kahn.next.unfold_bot : Kahn.next (⊥: Kahn α) = ⊥ := by
-  rw [Kahn.next, Kahn.cases_bot]
+@[simp] def ωStream.next.unfold_bot : ωStream.next (⊥: ωStream α) = ⊥ := by
+  rw [ωStream.next, ωStream.cases_bot]
 
-@[simp] def Kahn.next.unfold_cons (x: α) (xs: Kahn α) :
-  Kahn.next (x ::: xs) = xs := by
-  rw [Kahn.next, Kahn.cases_cons]
+@[simp] def ωStream.next.unfold_cons (x: α) (xs: ωStream α) :
+  ωStream.next (x ::: xs) = xs := by
+  rw [ωStream.next, ωStream.cases_cons]
 
-#check Kahn.F.mk.inj
+#check ωStream.F.mk.inj
 
 @[simps! coe]
-def OrderHom.Kahn.next : Kahn α →o Kahn α where
-  toFun := _root_.Kahn.next
+def OrderHom.ωStream.next : ωStream α →o ωStream α where
+  toFun := _root_.ωStream.next
   monotone' := by
     intro x y h₁
     cases x with
@@ -1621,54 +1700,56 @@ def OrderHom.Kahn.next : Kahn α →o Kahn α where
     | cons x xs =>
       cases y with
       | bot =>
-        rw [Kahn.le_bot _ h₁]
+        rw [ωStream.le_bot _ h₁]
       | cons y ys =>
-        rw [Kahn.le_cons x y xs ys] at h₁
-        simp only [Kahn.next.unfold_cons]
+        rw [ωStream.le_cons x y xs ys] at h₁
+        simp only [ωStream.next.unfold_cons]
         apply h₁.right
 
 #check Preorder.le_trans
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.next : Kahn α →𝒄 Kahn α where
-  toFun := _root_.Kahn.next
-  monotone' := OrderHom.Kahn.next.monotone'
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.next :
+  ωStream α →𝒄 ωStream α where
+  toFun := _root_.ωStream.next
+  monotone' := OrderHom.ωStream.next.monotone'
   cont := by
     intro chain
     simp
     apply le_antisymm
-    · cases Kahn.findCons chain with
+    · cases ωStream.findCons chain with
       | bot h₁ =>
-        rw [Kahn.ωSup_bot chain h₁]
-        rw [Kahn.ωSup_bot]
+        rw [ωStream.ωSup_bot chain h₁]
+        rw [ωStream.ωSup_bot]
         · simp
         · intro n
           simp [Chain.map, h₁ n]
       | cons n x xs h₁ =>
-        rw [Kahn.ωSup_cons chain n x xs h₁]
+        rw [ωStream.ωSup_cons chain n x xs h₁]
         apply ωSup_le
         intro m
         apply Preorder.le_trans _ _ _ _ (le_ωSup _ (n+m))
         simp [←h₁ m]
     · apply ωSup_le
       intro n
-      apply OrderHom.Kahn.next.monotone
+      apply OrderHom.ωStream.next.monotone
       apply le_ωSup
 
 
 
 
-def Kahn.first (x: Kahn α) : Kahn α :=
-  Kahn.cases (bot := .bot) (cons := λ x _ => const x) x
+def ωStream.first (x: ωStream α) : ωStream α :=
+  ωStream.cases (bot := .bot) (cons := λ x _ => const x) x
 
-@[simp] def Kahn.first.unfold_bot : Kahn.first (⊥: Kahn α) = ⊥ := by
-  rw [Kahn.first, Kahn.cases_bot]
+@[simp] def ωStream.first.unfold_bot : ωStream.first (⊥: ωStream α) = ⊥ := by
+  rw [ωStream.first, ωStream.cases_bot]
 
-@[simp] def Kahn.first.unfold_cons (x: α) (xs: Kahn α) : Kahn.first (x ::: xs) = const x := by
-  rw [Kahn.first, Kahn.cases_cons]
+@[simp] def ωStream.first.unfold_cons
+  (x: α) (xs: ωStream α) : ωStream.first (x ::: xs) = const x := by
+  rw [ωStream.first, ωStream.cases_cons]
 
 @[simps! coe]
-def OrderHom.Kahn.first : Kahn α →o Kahn α where
-  toFun := _root_.Kahn.first
+def OrderHom.ωStream.first : ωStream α →o ωStream α where
+  toFun := _root_.ωStream.first
   monotone' := by
     intro x y h₁
     cases x with
@@ -1677,51 +1758,52 @@ def OrderHom.Kahn.first : Kahn α →o Kahn α where
     | cons x xs =>
       cases y with
       | bot =>
-        rw [Kahn.le_bot _ h₁]
+        rw [ωStream.le_bot _ h₁]
       | cons y ys =>
-        rw [Kahn.le_cons x y xs ys] at h₁
-        simp only [Kahn.first.unfold_cons]
+        rw [ωStream.le_cons x y xs ys] at h₁
+        simp only [ωStream.first.unfold_cons]
         rw [h₁.left]
 
 #check Preorder.le_trans
 
-def OmegaCompletePartialOrder.ContinuousHom.Kahn.first : Kahn α →𝒄 Kahn α where
-  toFun := _root_.Kahn.first
-  monotone' := OrderHom.Kahn.first.monotone'
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.first
+  : ωStream α →𝒄 ωStream α where
+  toFun := _root_.ωStream.first
+  monotone' := OrderHom.ωStream.first.monotone'
   cont := by
     intro chain
     simp
     apply le_antisymm
-    · cases Kahn.findCons chain with
+    · cases ωStream.findCons chain with
       | bot h₁ =>
-        rw [Kahn.ωSup_bot chain h₁]
-        rw [Kahn.ωSup_bot]
+        rw [ωStream.ωSup_bot chain h₁]
+        rw [ωStream.ωSup_bot]
         · simp
         · intro n
           simp [Chain.map, h₁ n]
       | cons n x xs h₁ =>
         conv =>
           congr
-          · rw [Kahn.ωSup_cons chain n x xs h₁]
-          · rw [Kahn.ωSup_cons _ n x (OrderHom.const _ (Kahn.const x))]
+          · rw [ωStream.ωSup_cons chain n x xs h₁]
+          · rw [ωStream.ωSup_cons _ n x (OrderHom.const _ (ωStream.const x))]
             rfl
             tactic =>
               intro m
-              simp [Chain.map, ←h₁ m, ←Kahn.const.unfold]
+              simp [Chain.map, ←h₁ m, ←ωStream.const.unfold]
         simp
-        have : ωSup (OrderHom.const _ (Kahn.const x)) = Kahn.const x := by
+        have : ωSup (OrderHom.const _ (ωStream.const x)) = ωStream.const x := by
           apply le_antisymm
           · apply ωSup_le
             intro n
             apply le_refl
-          · apply le_ωSup (OrderHom.const _ (Kahn.const x)) n
+          · apply le_ωSup (OrderHom.const _ (ωStream.const x)) n
         rw [this]
         conv =>
           lhs
-          rw [Kahn.const.unfold]
+          rw [ωStream.const.unfold]
     · apply ωSup_le
       intro n
-      apply OrderHom.Kahn.first.monotone
+      apply OrderHom.ωStream.first.monotone
       apply le_ωSup
 
 
