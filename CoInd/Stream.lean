@@ -475,3 +475,116 @@ def stream.EntailsF.mono : Monotone stream.EntailsF := by
     exact EntailsF.cons p ps h₂ (h₁ _ h₃) h₄
 
 def stream.Entails := pgfp ⟨EntailsF, EntailsF.mono⟩ ⊥
+
+#check pgfp.unfold
+#check stream.cons.inj
+
+def stream.Entails.unfold (x: Prop) (xs: stream Prop) :
+  Entails (x ::: xs) = (x ∧ Entails xs) := by
+  apply propext
+  conv =>
+    lhs
+    rw [Entails, ←pgfp.unfold]
+    simp
+  constructor
+  · intro h₁
+    cases h₁ with
+    | cons p ps h₁ h₂ h₃ =>
+      have ⟨h₄, h₅⟩ := stream.cons.inj _ _ _ _ h₃
+      induction h₄
+      induction h₅
+      constructor
+      · exact h₁
+      · exact h₂
+  · intro ⟨h₁, h₂⟩
+    apply EntailsF.cons x xs h₁ h₂ rfl
+
+#check pgfp.coinduction
+#check pgfp.accumulate
+
+def stream.Entails.coind
+  (hyp: stream Prop → Prop)
+  (h₁: ∀ x, hyp x → x.head ∧ hyp x.tail)
+  (s: stream Prop) (h₂: hyp s) : Entails s := by
+  have := (pgfp.coinduction ⟨EntailsF, EntailsF.mono⟩ hyp).2
+  apply this
+  clear this
+  · intro s
+    cases s with
+    | cons x xs =>
+      intro h₃
+      apply EntailsF.cons x xs (h₁ (x ::: xs) h₃).1
+      · apply Or.inl
+        apply (h₁ (x ::: xs) h₃).right
+      · rfl
+  · assumption
+
+
+
+
+-- A projection from Kahn networks to streams using a default value in case of
+-- we see ⊥
+def ωStream.proj (s: ωStream α) (default: α) : stream α :=
+  stream.corec
+    (λ s =>
+      ωStream.cases
+        (bot := stream.F.cons default ⊥)
+        (cons := λ x xs => stream.F.cons x xs)
+        s
+    ) s
+
+@[simp] def ωStream.proj.unfold_bot (default: α) :
+  (⊥: ωStream α).proj default = stream.const default := by
+  coinduction generalizing [] using stream.bisim
+  intro s₁ s₂ ⟨eq₁, eq₂, _⟩
+  induction eq₁
+  induction eq₂
+  apply stream.eqF.cons default
+    ((⊥: ωStream α).proj default) (stream.const default)
+  · conv =>
+      rhs
+      simp [proj]
+      rw [stream.corec.unfold]
+      simp
+    rfl
+  · simp [←stream.const.unfold]
+  · simp
+
+
+@[simp] def ωStream.proj.unfold_cons (x: α) (xs: ωStream α) (default: α) :
+  (x ::: xs).proj default = x ::: xs.proj default := by
+  rw [proj, stream.corec.unfold]
+  rfl
+
+
+-- An injective function from infinite streams to finite or infinite streams
+def stream.inj (s: stream α) : ωStream α :=
+  ωStream.corec (λ s => stream.cases (cons := λ x xs => .cons x xs) s) s
+
+@[simp] def stream.inj.unfold (x: α) (xs: stream α) :
+  (x ::: xs).inj = x ::: xs.inj := by
+  rw [inj, ωStream.corec.unfold]
+  rfl
+
+@[simp] def stream.inj.injEq (x y: stream α) :
+  (inj x = inj y) = (x = y) := by
+  apply propext
+  constructor
+  · intro h
+    coinduction generalizing [x, y] using stream.bisim
+    clear x y
+    intro l r ⟨x, y, eq₁, eq₂, h₁⟩
+    induction eq₁
+    induction eq₂
+    cases x
+    cases y
+    case cons x xs y ys =>
+      simp at h₁
+      rw [ωStream.cons.injEq] at h₁
+      induction h₁.left
+      apply eqF.cons x xs ys rfl rfl
+      exists xs
+      exists ys
+      simp [h₁.right]
+  · intro h
+    rw [h]
