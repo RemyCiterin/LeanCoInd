@@ -463,6 +463,97 @@ by
         simp only [consEq] at h₁
         apply h₁.right
 
+def ωStream.imp (P Q: ωStream Prop) : ωStream Prop :=
+  P.not.or Q
+
+def ωStream.imp.unfold_bot_left (Q: ωStream Prop) :
+  ωStream.imp ⊥ Q = ⊥ := by
+  simp [imp]
+
+def ωStream.imp.unfold_bot_right (P: ωStream Prop) :
+  ωStream.imp P ⊥ = ⊥ := by
+  simp [imp]
+
+def ωStream.imp.unfold_cons (P Q: Prop) (Ps Qs: ωStream Prop) :
+  (P ::: Ps).imp (Q ::: Qs) = (P → Q) ::: Ps.imp Qs := by
+  simp only [imp, or.unfold_cons, not.unfold_cons]
+  rw [ωStream.cons.injEq]
+  simp only [and_true, eq_iff_iff]
+  constructor
+  · rintro (h|h) h'
+    · cases h h'
+    · assumption
+  · intro h
+    by_cases P
+    case pos h' =>
+      exact (Or.inr (h h'))
+    case neg h' =>
+      exact (Or.inl h')
+
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.imp :
+  ωStream Prop × ωStream Prop →𝒄 ωStream Prop :=
+  ωStream.or.comp <| Prod.prod
+    (ωStream.not.comp Prod.fst)
+    Prod.snd
+
+def OmegaCompletePartialOrder.ContinuousHom.ωStream.imp_apply
+  (P Q: ωStream Prop) : ωStream.imp (P, Q) = _root_.ωStream.imp P Q :=
+  rfl
+
+-- Duplicate is not a monotone function because
+--     x ::: ⊥ ≤ x ::: y ::: ⊥
+-- but
+--     duplicate (x ::: ⊥) = (x ::: ⊥) ::: ⊥
+-- and
+--     duplicate (x ::: y ::: ⊥) = (x ::: y ::: ⊥) ::: (y ::: ⊥) ::: ⊥
+-- so
+--     duplicate (x ::: ⊥) ≰ duplicate (x ::: y ::: ⊥)
+def ωStream.duplicate : ωStream α → ωStream (ωStream α) :=
+  corec (λ x =>
+    ωStream.cases x
+      (cons := λ x xs => F.cons (x ::: xs) xs)
+      (bot := F.bot)
+  )
+
+@[simp] def ωStream.duplicate.unfold_bot :
+  duplicate (⊥: ωStream α) = ⊥ := by
+  rw [duplicate, corec.unfold, ωStream.cases_bot]
+
+@[simp] def ωStream.duplicate.unfold_cons (x: α) (xs: ωStream α) :
+  (x ::: xs).duplicate = (x ::: xs) ::: duplicate xs := by
+  rw [duplicate, corec.unfold, ωStream.cases_cons]
+
+def ωStream.extend : (ωStream α → β) → ωStream α → ωStream β :=
+  λ f x => map f (duplicate x)
+
+@[simp] def ωStream.extend.unfold_bot (f: ωStream α → β) :
+  extend f ⊥ = ⊥ := by
+  rw [extend, duplicate.unfold_bot, map.unfold_bot]
+
+@[simp] def ωStream.extend.unfold_cons
+  (f: ωStream α → β) (x: α) (xs: ωStream α) :
+  extend f (x ::: xs) = f (x ::: xs) ::: extend f xs := by
+  rw [extend, duplicate.unfold_cons, map.unfold_cons]
+  rfl
+
+inductive ωStream.Until'
+  : ωStream Prop → ωStream Prop → Prop where
+| stop {P Q} (p q: Prop) (ps qs: ωStream Prop) :
+  q → p ::: ps = P → q ::: qs = Q → Until' P Q
+| cons {P Q} (p q: Prop) (ps qs: ωStream Prop) :
+  p → Until' ps qs → p ::: ps = P → q ::: qs = Q → Until' P Q
+
+-- P U Q := P.Until' Q ::: ∘P U ∘Q
+def ωStream.Until (P: ωStream Prop) (Q: ωStream Prop) : ωStream Prop :=
+  corec (λ (P, Q) =>
+    F.cons (Until' P Q) (P.next, Q.next)
+  ) (P, Q)
+
+@[simp] def ωStream.Until.unfold (Q: ωStream Prop) :
+  Until P Q = Until' P Q ::: Until P.next Q.next :=
+  by rw [Until, corec.unfold]
+     rfl
+
 
 syntax:max "tprop(" term ")" : term
 syntax:max "term(" term ")" : term
@@ -759,3 +850,32 @@ theorem and_assoc {P Q R : PROP} : (P ∧ Q) ∧ R ⊣⊢ P ∧ Q ∧ R :=
    and_intro (and_mono_r and_elim_l) (and_elim_r' and_elim_r)⟩
 
 end LTL
+
+instance ωStream.instLTLBase : LTLBase (ωStream Prop) where
+  Entails := ωStream.Entails
+  And := ωStream.and
+  Imp := ωStream.imp
+  Pure := ωStream.const
+  Or := ωStream.or
+  Until := ωStream.Until
+  Next := ωStream.next
+
+theorem ωStream.entails_reflexive
+  (P: ωStream Prop) : P ⊢ P := by
+  coinduction generalizing [P] using ωStream.Entails.coind
+  intro l r ⟨P, eq₁, eq₂, _⟩
+  induction eq₁
+  induction eq₂
+  cases P
+  case bot =>
+    apply Entails.F.BotLeft
+  case cons p ps =>
+    apply Entails.F.cons p p ps ps
+    · intro h
+      exact h
+    · exists ps
+    · rfl
+    · rfl
+
+--theorem ωStream.entails_transitive (P Q R: ωStream Prop) :
+--  (P ⊢ Q) → (Q ⊢ R) → (P ⊢ R) := by

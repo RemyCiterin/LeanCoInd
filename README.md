@@ -35,3 +35,10 @@ defprop foo.inv2 => (X: Kahn Int, Y: Kahn Int) (Z: Kahn Int, Init: Kahn Int) :=
 The implementation of coinductives types (M-types and indexed M-types) is based on
 ["Data types as quotients of polynomial functor"](http://www.contrib.andrew.cmu.edu/~avigad/Papers/qpf.pdf).
 With a generalization to indexed polynomial functors
+
+
+I also try to define a LTL logic over finite or infinite streams compatible with
+the notion of admissible properties (such that P \entails Q is admissible in Q),
+but their is an issue because entails is not transitive in this case :
+    if $Q = \bottom$, then $P \entails Q$ and $Q \entails R$ but their is no
+    reason for $P \entails R$
