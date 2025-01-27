@@ -42,3 +42,5 @@ the notion of admissible properties (such that P \entails Q is admissible in Q),
 but their is an issue because entails is not transitive in this case :
     if $Q = \bottom$, then $P \entails Q$ and $Q \entails R$ but their is no
     reason for $P \entails R$
+
+Classifying discrete temporal properties
